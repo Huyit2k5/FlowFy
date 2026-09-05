@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getPlanLimits } from "@/lib/plan-limits";
 
 /**
  * Mời thành viên vào workspace bằng email (chỉ owner/admin).
@@ -33,6 +34,31 @@ export async function POST(request: NextRequest) {
 
   if (!me || !["owner", "admin"].includes(me.role)) {
     return NextResponse.json({ error: "Bạn không có quyền mời thành viên." }, { status: 403 });
+  }
+
+  // Kiểm tra giới hạn thành viên theo gói
+  const { data: ws } = await supabase
+    .from("workspaces")
+    .select("plan")
+    .eq("id", workspaceId)
+    .maybeSingle();
+
+  const plan = (ws as { plan: string } | null)?.plan ?? "free";
+  const limits = getPlanLimits(plan);
+
+  const { count } = await supabase
+    .from("members")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId)
+    .eq("status", "active");
+
+  if ((count ?? 0) >= limits.members) {
+    return NextResponse.json(
+      {
+        error: `Gói ${plan} chỉ cho phép tối đa ${limits.members} thành viên. Hãy nâng cấp gói để mời thêm.`,
+      },
+      { status: 403 }
+    );
   }
 
   const { error } = await supabase.from("members").insert({

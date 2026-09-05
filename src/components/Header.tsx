@@ -39,13 +39,13 @@ export default function Header() {
 
         <div className="hidden items-center gap-3 md:flex">
           <a
-            href="#"
+            href="/login"
             className="text-sm font-medium text-zinc-600 transition-colors hover:text-brand"
           >
             Đăng nhập
           </a>
           <a
-            href="#cta"
+            href="/register"
             className="rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-200 transition-colors hover:bg-brand-dark"
           >
             Dùng thử miễn phí
@@ -85,7 +85,14 @@ export default function Header() {
               </a>
             ))}
             <a
-              href="#cta"
+              href="/login"
+              onClick={() => setOpen(false)}
+              className="text-sm font-medium text-zinc-600 hover:text-brand"
+            >
+              Đăng nhập
+            </a>
+            <a
+              href="/register"
               onClick={() => setOpen(false)}
               className="mt-2 rounded-full bg-brand px-5 py-2.5 text-center text-sm font-semibold text-white"
             >

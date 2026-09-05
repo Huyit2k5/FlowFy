@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createWorkflow } from "@/lib/workflow-db";
+import { getPlanLimits } from "@/lib/plan-limits";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -38,6 +39,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "Cần workspace_id và name" },
       { status: 400 }
+    );
+  }
+
+  // Kiểm tra giới hạn workflow theo gói
+  const { data: ws } = await supabase
+    .from("workspaces")
+    .select("plan")
+    .eq("id", workspace_id)
+    .maybeSingle();
+
+  const plan = (ws as { plan: string } | null)?.plan ?? "free";
+  const limits = getPlanLimits(plan);
+
+  const { count } = await supabase
+    .from("workflows")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspace_id);
+
+  if ((count ?? 0) >= limits.workflows) {
+    return NextResponse.json(
+      {
+        error: `Gói ${plan} chỉ cho phép tối đa ${limits.workflows} workflow. Hãy nâng cấp gói để tạo thêm.`,
+      },
+      { status: 403 }
     );
   }
 
