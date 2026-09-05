@@ -1,0 +1,62 @@
+﻿
+> web-test@0.1.0 build
+> next build
+
+▲ Next.js 16.3.2 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 223ms
+
+node.exe : ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (⚠ The "middlewa...proxy" instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 3.7s
+  Running TypeScript ...
+  Finished TypeScript in 13.7s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/15) ...
+  Generating static pages using 11 workers (3/15) 
+  Generating static pages using 11 workers (7/15) 
+  Generating static pages using 11 workers (11/15) 
+✓ Generating static pages using 11 workers (15/15) in 1598ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/auth/signin
+├ ƒ /api/auth/signout
+├ ƒ /api/auth/signup
+├ ƒ /api/workflows
+├ ƒ /api/workflows/[id]
+├ ƒ /api/workflows/[id]/run
+├ ƒ /api/workflows/[id]/runs
+├ ƒ /api/workflows/runs/[runId]/logs
+├ ƒ /api/workspaces
+├ ƒ /api/workspaces/invites
+├ ƒ /api/workspaces/invites/accept
+├ ƒ /app
+├ ƒ /app/[id]
+├ ƒ /app/[id]/members
+├ ƒ /app/[id]/settings
+├ ƒ /app/[id]/workflows
+├ ƒ /app/[id]/workflows/[workflowId]
+├ ○ /login
+├ ƒ /onboarding
+└ ○ /register
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
