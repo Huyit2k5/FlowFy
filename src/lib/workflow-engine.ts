@@ -40,10 +40,14 @@ function interpolate(template: string, ctx: Ctx): string {
 }
 
 // ---------- Runners cho từng loại node ----------
-async function runTrigger(node: WorkflowNode): Promise<NodeResult> {
+async function runTrigger(node: WorkflowNode, ctx: Ctx): Promise<NodeResult> {
   const cfg = node.data as Record<string, unknown>;
+  if (cfg.triggerType === "webhook") {
+    // Input từ webhook đã được inject vào ctx.data["trigger"]
+    const input = ctx.data["trigger"] ?? {};
+    return { status: "success", output: { triggeredBy: "webhook", input } };
+  }
   if (cfg.triggerType === "schedule" && cfg.scheduleCron) {
-    // Ở đây chỉ lưu config, schedule thực sự cần queue (BullMQ) - Phase sau
     return { status: "success", output: { triggeredBy: "schedule", cron: cfg.scheduleCron } };
   }
   return { status: "success", output: { triggeredBy: "manual" } };
@@ -180,7 +184,7 @@ async function runDelay(node: WorkflowNode): Promise<NodeResult> {
 }
 
 const runners: Record<string, (node: WorkflowNode, ctx: Ctx) => Promise<NodeResult>> = {
-  trigger: (n) => runTrigger(n),
+  trigger: runTrigger,
   webhook: runWebhook,
   slack: runSlack,
   email: runEmail,
@@ -197,8 +201,10 @@ export async function executeWorkflow(params: {
   workflowId: string;
   workspaceId: string;
   trigger: string;
+  input?: Record<string, unknown>;
+  supabase?: import("@supabase/supabase-js").SupabaseClient;
 }): Promise<RunResult> {
-  const supabase = await createClient();
+  const supabase = params.supabase ?? (await createClient());
 
   // 1) Tạo run
   const { data: run, error: runErr } = await supabase
@@ -236,6 +242,10 @@ export async function executeWorkflow(params: {
   }
 
   const ctx: Ctx = { data: {} };
+  // Nếu có input từ webhook, inject vào ctx cho trigger node
+  if (params.input) {
+    ctx.data["trigger"] = params.input;
+  }
   const logs: RunLog[] = [];
   let failed = false;
 

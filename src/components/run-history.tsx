@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
+import { createClient } from "@/lib/supabase/browser";
 
 interface Run {
   id: string;
@@ -20,6 +20,7 @@ interface Log {
   input: unknown;
   output: unknown;
   error: string | null;
+  created_at: string;
 }
 
 interface Props {
@@ -29,12 +30,75 @@ interface Props {
 }
 
 export default function RunHistory({ workflowId, initialRuns }: Props) {
-  const router = useRouter();
+  const supabase = createClient();
   const [open, setOpen] = useState(false);
   const [runs, setRuns] = useState<Run[]>(initialRuns);
   const [selectedRun, setSelectedRun] = useState<Run | null>(null);
   const [logs, setLogs] = useState<Log[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const logsChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Realtime: subscribe khi chọn run
+  useEffect(() => {
+    if (!selectedRun) return;
+
+    // Load logs ban đầu
+    loadLogs(selectedRun.id);
+
+    // Subscribe realtime cho run logs
+    const channel = supabase
+      .channel(`run-logs-${selectedRun.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "run_logs", filter: `run_id=eq.${selectedRun.id}` },
+        (payload) => {
+          const newLog = payload.new as Log;
+          setLogs((prev) => {
+            if (prev.some((l) => l.id === newLog.id)) return prev;
+            return [...prev, newLog].sort((a, b) => a.created_at.localeCompare(b.created_at));
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "workflow_runs", filter: `id=eq.${selectedRun.id}` },
+        (payload) => {
+          const updated = payload.new as Run;
+          setSelectedRun(updated);
+          setRuns((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+          // Nếu run kết thúc, refresh logs
+          if (updated.status !== "running") {
+            loadLogs(updated.id);
+          }
+        }
+      )
+      .subscribe();
+
+    logsChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedRun?.id]);
+
+  // Realtime: subscribe run mới (khi workflow chạy)
+  useEffect(() => {
+    const channel = supabase
+      .channel(`workflow-runs-${workflowId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "workflow_runs", filter: `workflow_id=eq.${workflowId}` },
+        (payload) => {
+          const newRun = payload.new as Run;
+          setRuns((prev) => [newRun, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [workflowId]);
 
   async function loadLogs(runId: string) {
     setLoadingLogs(true);
@@ -42,7 +106,6 @@ export default function RunHistory({ workflowId, initialRuns }: Props) {
     const data = await res.json().catch(() => ({}));
     setLogs(data.logs ?? []);
     setLoadingLogs(false);
-    router.refresh();
   }
 
   async function refreshRuns() {

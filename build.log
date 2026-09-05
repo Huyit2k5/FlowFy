@@ -4,7 +4,7 @@
 
 ▲ Next.js 16.3.2 (Turbopack)
 - Environments: .env.local
-✓ Running next.config.ts took 23ms
+✓ Running next.config.ts took 35ms
 
 node.exe : ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
 At line:1 char:1
@@ -19,15 +19,15 @@ At line:1 char:1
 
   Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
   Creating an optimized production build ...
-✓ Compiled successfully in 3.2s
+✓ Compiled successfully in 2.3s
   Running TypeScript ...
-  Finished TypeScript in 11.8s ...
+  Finished TypeScript in 14.2s ...
   Collecting page data using 11 workers ...
   Generating static pages using 11 workers (0/15) ...
   Generating static pages using 11 workers (3/15) 
   Generating static pages using 11 workers (7/15) 
   Generating static pages using 11 workers (11/15) 
-✓ Generating static pages using 11 workers (15/15) in 2.2s
+✓ Generating static pages using 11 workers (15/15) in 2.7s
   Finalizing page optimization ...
 
 Route (app)
@@ -36,10 +36,12 @@ Route (app)
 ├ ƒ /api/auth/signin
 ├ ƒ /api/auth/signout
 ├ ƒ /api/auth/signup
+├ ƒ /api/webhooks/[id]
 ├ ƒ /api/workflows
 ├ ƒ /api/workflows/[id]
 ├ ƒ /api/workflows/[id]/run
 ├ ƒ /api/workflows/[id]/runs
+├ ƒ /api/workflows/[id]/schedule
 ├ ƒ /api/workflows/runs/[runId]/logs
 ├ ƒ /api/workspaces
 ├ ƒ /api/workspaces/invites

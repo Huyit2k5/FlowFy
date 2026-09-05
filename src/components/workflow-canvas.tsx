@@ -69,6 +69,9 @@ export default function WorkflowCanvas({ workflow }: Props) {
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [scheduleOn, setScheduleOn] = useState<boolean>(
+    (workflow as { schedule_enabled?: boolean }).schedule_enabled ?? false
+  );
   const nodeCounter = useRef(0);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -176,6 +179,46 @@ export default function WorkflowCanvas({ workflow }: Props) {
     router.refresh();
   };
 
+  // Toggle schedule
+  const toggleSchedule = async () => {
+    if (!scheduleOn) {
+      // Bật: tìm trigger node có scheduleCron
+      const triggerNode = nodes.find(
+        (n) => n.data.nodeType === "trigger" && n.data.triggerType === "schedule" && n.data.scheduleCron
+      );
+      if (!triggerNode) {
+        setRunResult("⚠ Cần tạo trigger node với loại 'Định kỳ' và nhập cron trước.");
+        return;
+      }
+      const cron = triggerNode.data.scheduleCron as string;
+      const res = await fetch(`/api/workflows/${workflow.id}/schedule`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cron, enabled: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setScheduleOn(true);
+        setRunResult(`✓ Đã bật lịch: ${cron}`);
+      } else {
+        setRunResult(`✗ ${data.error ?? "Lỗi bật lịch"}`);
+      }
+    } else {
+      const res = await fetch(`/api/workflows/${workflow.id}/schedule`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setScheduleOn(false);
+        setRunResult("✓ Đã tắt lịch chạy");
+      } else {
+        setRunResult(`✗ ${data.error ?? "Lỗi tắt lịch"}`);
+      }
+    }
+  };
+
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
 
   const palette: { type: NodeType; icon: string; label: string }[] = [
@@ -212,6 +255,17 @@ export default function WorkflowCanvas({ workflow }: Props) {
             className="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-60"
           >
             {running ? "Đang chạy..." : "▶ Chạy"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleSchedule}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+              scheduleOn
+                ? "bg-green-100 text-green-700 hover:bg-green-200"
+                : "border border-zinc-200 hover:bg-zinc-50"
+            }`}
+          >
+            {scheduleOn ? "⏰ Đang bật lịch" : "⏰ Bật lịch"}
           </button>
         </div>
       </div>

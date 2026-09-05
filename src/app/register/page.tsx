@@ -23,11 +23,16 @@ export default function Register() {
     body.set("email", email);
     body.set("password", password);
 
-    const res = await fetch("/api/auth/signup", { method: "POST", body });
-    if (res.redirected) {
-      const url = new URL(res.url);
-      router.push(url.pathname);
-      router.refresh();
+    const res = await fetch("/api/auth/signup", { method: "POST", body, redirect: "manual" });
+    if (res.status === 307 || res.status === 302 || res.status === 308) {
+      const redirectUrl = res.headers.get("Location");
+      if (redirectUrl) {
+        router.push(redirectUrl.startsWith("http") ? new URL(redirectUrl).pathname : "/login?checked=1");
+        router.refresh();
+      } else {
+        router.push("/login?checked=1");
+        router.refresh();
+      }
       return;
     }
 

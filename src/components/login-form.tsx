@@ -25,10 +25,16 @@ export default function LoginForm() {
     body.set("password", password);
     body.set("next", next);
 
-    const res = await fetch("/api/auth/signin", { method: "POST", body });
-    if (res.redirected) {
-      router.push(next);
-      router.refresh();
+    const res = await fetch("/api/auth/signin", { method: "POST", body, redirect: "manual" });
+    if (res.status === 307 || res.status === 302 || res.status === 308) {
+      const redirectUrl = res.headers.get("Location");
+      if (redirectUrl) {
+        router.push(redirectUrl.startsWith("http") ? redirectUrl : next);
+        router.refresh();
+      } else {
+        router.push(next);
+        router.refresh();
+      }
       return;
     }
 

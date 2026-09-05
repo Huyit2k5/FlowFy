@@ -1,12 +1,125 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import type { WorkflowNode } from "@/lib/workflow-types";
 
 interface Props {
   node: WorkflowNode | null;
   onSave: (id: string, data: Record<string, unknown>) => void;
   onDelete: (id: string) => void;
+}
+
+function ScheduleConfig({
+  cron,
+  onChange,
+}: {
+  cron: string;
+  onChange: (v: string) => void;
+}) {
+  const presets = [
+    { label: "Mỗi giờ", value: "0 * * * *" },
+    { label: "Mỗi ngày 9h", value: "0 9 * * *" },
+    { label: "T2-T6 9h", value: "0 9 * * 1-5" },
+    { label: "Hàng tuần (T2)", value: "0 9 * * 1" },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="mb-1.5 block text-sm font-medium">Cron expression</label>
+        <input
+          type="text"
+          value={cron}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="VD: 0 9 * * 1-5 (9h T2-T6)"
+          className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+        />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-medium">Lựa chọn nhanh</label>
+        <div className="flex flex-wrap gap-2">
+          {presets.map((p) => (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => onChange(p.value)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                cron === p.value
+                  ? "bg-brand text-white"
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="text-xs text-zinc-400">
+        Sau khi lưu, bấm &quot;Bật lịch chạy&quot; ở trên canvas để kích hoạt.
+      </p>
+    </div>
+  );
+}
+
+function WebhookUrlBlock() {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchUrl = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Lấy workflow id từ parent qua context — đơn giản: dùng data prop
+      // Nhưng component này không có workflow id, nên ta dùng query param
+      const params = new URLSearchParams(window.location.search);
+      const wfId = params.get("workflow_id");
+      if (!wfId) {
+        setUrl("Không tìm thấy workflow ID");
+        return;
+      }
+      const res = await fetch(`/api/webhooks/${wfId}`);
+      const json = await res.json();
+      setUrl(json.webhookUrl ?? json.error ?? "Lỗi");
+    } catch {
+      setUrl("Lỗi mạng");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+      <label className="block text-sm font-medium">Webhook URL (public)</label>
+      <p className="mt-1 text-xs text-zinc-500">
+        Service ngoài POST JSON vào URL này để chạy workflow.
+      </p>
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          type="text"
+          readOnly
+          value={url ?? ""}
+          placeholder="Bấm nút để lấy URL"
+          className="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-600"
+        />
+        <button
+          type="button"
+          onClick={fetchUrl}
+          disabled={loading}
+          className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+        >
+          {loading ? "..." : url ? "Lấy lại" : "Lấy URL"}
+        </button>
+      </div>
+      {url && !url.startsWith("Lỗi") && !url.startsWith("Không") && (
+        <button
+          type="button"
+          onClick={() => navigator.clipboard.writeText(url)}
+          className="mt-2 text-xs text-brand hover:underline"
+        >
+          Copy URL
+        </button>
+      )}
+    </div>
+  );
 }
 
 const emptyDefaults: Record<string, Record<string, unknown>> = {
@@ -69,17 +182,12 @@ export default function NodeConfigPanel({ node, onSave, onDelete }: Props) {
             </select>
           </div>
           {data.triggerType === "schedule" && (
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">Cron</label>
-              <input
-                type="text"
-                value={(data.scheduleCron as string) ?? ""}
-                onChange={(e) => set("scheduleCron", e.target.value)}
-                placeholder="VD: 0 9 * * 1-5 (9h T2-T6)"
-                className={inputCls}
-              />
-            </div>
+            <ScheduleConfig
+              cron={(data.scheduleCron as string) ?? ""}
+              onChange={(v) => set("scheduleCron", v)}
+            />
           )}
+          {data.triggerType === "webhook" && <WebhookUrlBlock />}
         </>
       )}
 
