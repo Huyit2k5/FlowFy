@@ -1,0 +1,21 @@
+{
+  "name": "Flowly — Tự động hóa quy trình",
+  "short_name": "Flowly",
+  "description": "Nền tảng tự động hóa quy trình làm việc cho doanh nghiệp",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

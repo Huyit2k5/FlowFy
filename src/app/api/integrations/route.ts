@@ -1,5 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { z } from "zod";
+
+const integrationSchema = z.object({
+  workspace_id: z.string().uuid(),
+  type: z.enum(["slack", "email", "notion", "webhook"]),
+  name: z.string().max(100).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  is_active: z.boolean().optional(),
+});
 
 /**
  * GET: Lấy tất cả integrations của workspace.
@@ -39,23 +48,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { workspace_id, type, name, config, is_active } = body;
+  const body = await request.json().catch(() => null);
+  if (!body) {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
 
-  if (!workspace_id || !type) {
+  const parsed = integrationSchema.safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "Cần workspace_id và type" },
+      { error: "Invalid input", details: parsed.error.issues },
       { status: 400 }
     );
   }
-
-  const validTypes = ["slack", "email", "notion", "webhook"];
-  if (!validTypes.includes(type)) {
-    return NextResponse.json(
-      { error: `Type phải là: ${validTypes.join(", ")}` },
-      { status: 400 }
-    );
-  }
+  const { workspace_id, type, name, config, is_active } = parsed.data;
 
   // Kiểm tra có tồn tại integration cùng type không
   const { data: existing } = await supabase

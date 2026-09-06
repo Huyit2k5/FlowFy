@@ -13,9 +13,30 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Flowly — Tự động hóa quy trình làm việc cho doanh nghiệp",
+  title: {
+    default: "Flowly — Tự động hóa quy trình làm việc cho doanh nghiệp",
+    template: "%s — Flowly",
+  },
   description:
     "Flowly giúp đội ngũ của bạn quản lý công việc, tự động hóa quy trình lặp lại và cộng tác hiệu quả hơn trong một nền tảng duy nhất.",
+  manifest: "/manifest.json",
+  openGraph: {
+    type: "website",
+    locale: "vi_VN",
+    url: "https://flowly.vn",
+    siteName: "Flowly",
+    title: "Flowly — Tự động hóa quy trình làm việc",
+    description:
+      "Tự động hóa webhook, email, Slack, Notion. Cộng tác realtime. Chạy định kỳ.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Flowly — Tự động hóa quy trình làm việc",
+    description: "Webhook → Xử lý → Slack/Email/Notion. Cộng tác realtime.",
+  },
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
