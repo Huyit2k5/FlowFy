@@ -20,6 +20,12 @@ const navItems = [
   { href: "/settings", label: "Cài đặt", icon: SettingsIcon },
 ];
 
+const planBadge: Record<string, { label: string; cls: string }> = {
+  free: { label: "Free", cls: "bg-zinc-100 text-zinc-600" },
+  pro: { label: "Pro", cls: "bg-brand/10 text-brand" },
+  enterprise: { label: "Enterprise", cls: "bg-amber-100 text-amber-700" },
+};
+
 export default function AppShell({ workspaces, current, children }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -99,6 +105,29 @@ export default function AppShell({ workspaces, current, children }: Props) {
         </nav>
 
         <div className="border-t border-zinc-100 p-3">
+          {/* Plan badge + Upgrade */}
+          {current.plan && current.plan !== "pro" && current.plan !== "enterprise" && (
+            <Link
+              href="/upgrade"
+              className="mb-2 flex items-center justify-between rounded-lg border border-brand/30 bg-brand/5 px-3 py-2.5 transition hover:bg-brand/10"
+            >
+              <div className="flex items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${planBadge[current.plan]?.cls ?? planBadge.free.cls}`}>
+                  {planBadge[current.plan]?.label ?? "Free"}
+                </span>
+                <span className="text-xs text-zinc-500">Nâng cấp Pro</span>
+              </div>
+              <span className="text-xs text-brand">→</span>
+            </Link>
+          )}
+          {current.plan === "pro" || current.plan === "enterprise" ? (
+            <div className="mb-2 flex items-center gap-2 px-3 py-1.5">
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${planBadge[current.plan]?.cls}`}>
+                {planBadge[current.plan]?.label}
+              </span>
+            </div>
+          ) : null}
+
           <button
             type="button"
             onClick={signOut}

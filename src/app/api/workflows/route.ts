@@ -2,6 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createWorkflow } from "@/lib/workflow-db";
 import { getPlanLimits } from "@/lib/plan-limits";
+import { z } from "zod";
+import { logCreateWorkflow } from "@/lib/audit-log";
+
+const createWorkflowSchema = z.object({
+  workspace_id: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(1000).optional().nullable(),
+  trigger_type: z.enum(["manual", "webhook", "schedule"]).optional(),
+});
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -32,15 +41,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { workspace_id, name, description, trigger_type } = body;
+  const body = await request.json().catch(() => null);
+  if (!body) {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
 
-  if (!workspace_id || !name) {
+  const parsed = createWorkflowSchema.safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "Cần workspace_id và name" },
+      { error: "Invalid input", details: parsed.error.issues },
       { status: 400 }
     );
   }
+  const { workspace_id, name, description, trigger_type } = parsed.data;
 
   // Kiểm tra giới hạn workflow theo gói
   const { data: ws } = await supabase
@@ -70,10 +83,12 @@ export async function POST(request: NextRequest) {
     const wf = await createWorkflow({
       workspace_id,
       name,
-      description,
+      description: description || undefined,
       trigger_type: trigger_type ?? "manual",
       created_by: user.id,
     });
+    // Audit log (fire-and-forget)
+    logCreateWorkflow(user.id, workspace_id, wf.id, request);
     return NextResponse.json({ workflow: wf }, { status: 201 });
   } catch (e) {
     return NextResponse.json(
