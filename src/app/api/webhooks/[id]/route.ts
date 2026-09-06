@@ -1,7 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createPublicClient } from "@supabase/supabase-js";
 import { executeWorkflow } from "@/lib/workflow-engine";
 import crypto from "crypto";
+
+function getServiceClient() {
+  return createPublicClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 /**
  * Public webhook endpoint — không cần auth.
@@ -17,9 +25,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = getServiceClient();
 
-  // Lấy workflow
+  // Lấy workflow (dùng service role để bypass RLS — public endpoint)
   const { data: wf } = await supabase
     .from("workflows")
     .select("id, workspace_id, status, trigger_type, webhook_token")
@@ -66,6 +74,7 @@ export async function POST(
       workspaceId: workflow.workspace_id,
       trigger: "webhook",
       input: body,
+      supabase,
     });
     return NextResponse.json(result);
   } catch (e) {

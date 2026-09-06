@@ -64,12 +64,12 @@ export default async function DashboardPage({
       </div>
 
       {/* Stats */}
-      <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {stats.map((s) => (
-          <div key={s.label} className="rounded-xl border border-zinc-200 bg-white p-5">
-            <p className="text-sm text-zinc-500">{s.label}</p>
-            <p className="mt-2 text-3xl font-bold">{s.value}</p>
-            <p className="mt-1 text-xs text-zinc-400">{s.hint}</p>
+          <div key={s.label} className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5">
+            <p className="text-xs text-zinc-500 sm:text-sm">{s.label}</p>
+            <p className="mt-2 text-2xl font-bold sm:text-3xl">{s.value}</p>
+            <p className="mt-1 hidden text-xs text-zinc-400 sm:block">{s.hint}</p>
           </div>
         ))}
       </div>
