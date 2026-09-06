@@ -252,6 +252,62 @@ const runners: Record<string, (node: WorkflowNode, ctx: Ctx) => Promise<NodeResu
   notion: runNotion,
   condition: runCondition,
   delay: (n) => runDelay(n),
+  // Phase 7.1: Integration framework nodes
+  integration: async (node, ctx) => {
+    const { executeProviderNode } = await import("./integrations/registry");
+    const integConfig = (ctx.data.__integrations as Record<string, Record<string, string>>) ?? {};
+    return executeProviderNode(node, ctx, integConfig);
+  },
+  http: async (node, ctx) => {
+    const { executeProviderNode } = await import("./integrations/registry");
+    const integConfig = (ctx.data.__integrations as Record<string, Record<string, string>>) ?? {};
+    return executeProviderNode(node, ctx, integConfig);
+  },
+  google: async (node, ctx) => {
+    const { executeProviderNode } = await import("./integrations/registry");
+    const integConfig = (ctx.data.__integrations as Record<string, Record<string, string>>) ?? {};
+    return executeProviderNode(node, ctx, integConfig);
+  },
+  telegram: async (node, ctx) => {
+    const { executeProviderNode } = await import("./integrations/registry");
+    const integConfig = (ctx.data.__integrations as Record<string, Record<string, string>>) ?? {};
+    return executeProviderNode(node, ctx, integConfig);
+  },
+  discord: async (node, ctx) => {
+    const { executeProviderNode } = await import("./integrations/registry");
+    const integConfig = (ctx.data.__integrations as Record<string, Record<string, string>>) ?? {};
+    return executeProviderNode(node, ctx, integConfig);
+  },
+  zalo: async (node, ctx) => {
+    const { executeProviderNode } = await import("./integrations/registry");
+    const integConfig = (ctx.data.__integrations as Record<string, Record<string, string>>) ?? {};
+    return executeProviderNode(node, ctx, integConfig);
+  },
+  sms: async (node, ctx) => {
+    const { executeProviderNode } = await import("./integrations/registry");
+    const integConfig = (ctx.data.__integrations as Record<string, Record<string, string>>) ?? {};
+    return executeProviderNode(node, ctx, integConfig);
+  },
+  airtable: async (node, ctx) => {
+    const { executeProviderNode } = await import("./integrations/registry");
+    const integConfig = (ctx.data.__integrations as Record<string, Record<string, string>>) ?? {};
+    return executeProviderNode(node, ctx, integConfig);
+  },
+  trello: async (node, ctx) => {
+    const { executeProviderNode } = await import("./integrations/registry");
+    const integConfig = (ctx.data.__integrations as Record<string, Record<string, string>>) ?? {};
+    return executeProviderNode(node, ctx, integConfig);
+  },
+  transform: async (node, ctx) => {
+    const { executeProviderNode } = await import("./integrations/registry");
+    const integConfig = (ctx.data.__integrations as Record<string, Record<string, string>>) ?? {};
+    return executeProviderNode(node, ctx, integConfig);
+  },
+  database: async (node, ctx) => {
+    const { executeProviderNode } = await import("./integrations/registry");
+    const integConfig = (ctx.data.__integrations as Record<string, Record<string, string>>) ?? {};
+    return executeProviderNode(node, ctx, integConfig);
+  },
 };
 
 // ============================================================

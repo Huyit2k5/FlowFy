@@ -12,6 +12,17 @@ const typeMeta: Record<NodeType, { icon: string; label: string; color: string }>
   notion: { icon: "📄", label: "Notion", color: "border-zinc-300 bg-zinc-50" },
   condition: { icon: "⋔", label: "Điều kiện", color: "border-red-300 bg-red-50" },
   delay: { icon: "⏱", label: "Đợi", color: "border-cyan-300 bg-cyan-50" },
+  integration: { icon: "🔌", label: "Integration", color: "border-indigo-300 bg-indigo-50" },
+  transform: { icon: "🔄", label: "Transform", color: "border-teal-300 bg-teal-50" },
+  http: { icon: "🌐", label: "HTTP", color: "border-blue-300 bg-blue-50" },
+  google: { icon: "📧", label: "Google", color: "border-red-300 bg-red-50" },
+  telegram: { icon: "✈️", label: "Telegram", color: "border-sky-300 bg-sky-50" },
+  discord: { icon: "🎮", label: "Discord", color: "border-indigo-300 bg-indigo-50" },
+  zalo: { icon: "💚", label: "Zalo", color: "border-green-300 bg-green-50" },
+  sms: { icon: "📱", label: "SMS", color: "border-orange-300 bg-orange-50" },
+  airtable: { icon: "📊", label: "Airtable", color: "border-pink-300 bg-pink-50" },
+  trello: { icon: "📋", label: "Trello", color: "border-yellow-300 bg-yellow-50" },
+  database: { icon: "🗄️", label: "Database", color: "border-slate-300 bg-slate-50" },
 };
 
 export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {

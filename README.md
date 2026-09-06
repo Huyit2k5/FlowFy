@@ -8,9 +8,9 @@ Giao diện tiếng Việt, giá VND, hỗ trợ 24/7.
 
 ## Tổng quan
 
-Flowly là SaaS giúp đội ngũ tự động hóa quy trình lặp lại: nhận webhook → xử lý → gửi Slack/Email/Notion, chạy định kỳ theo cron, cộng tác realtime trên canvas, thanh toán subscription qua Stripe.
+Flowly là SaaS giúp đội ngũ tự động hóa quy trình lặp lại: nhận webhook → xử lý → gửi Slack/Email/Notion/Telegram/Zalo/Google/Airtable/Trello, chạy định kỳ theo cron, cộng tác realtime trên canvas, AI sinh workflow từ mô tả, thanh toán subscription qua Stripe.
 
-**Hoàn thành: Phase 1–6** (Auth, Workflow Engine, Webhook/Schedule, Integrations, Real-time Collab, Billing/Security/Performance/Admin).
+**Hoàn thành: Phase 1–7.2** (Auth, Workflow Engine, Webhook/Schedule, Integrations, Real-time Collab, Billing/Security/Performance/Admin, Integration Framework + AI Assistant).
 
 ---
 
@@ -25,6 +25,7 @@ Flowly là SaaS giúp đội ngũ tự động hóa quy trình lặp lại: nh�
 | Queue / Schedule | BullMQ + ioredis (Upstash Redis / local) |
 | Validation | Zod 4 |
 | Payment | Stripe (Checkout + Webhooks) |
+| AI | OpenAI GPT-4o-mini / DeepSeek (VN-friendly) |
 | Error Tracking | Sentry-ready (console fallback) |
 | Rate Limiting | In-memory (production: Upstash) |
 | Language | TypeScript 5 |
@@ -59,7 +60,8 @@ src/
 │   │   │   ├── loading.tsx         # Dashboard loading skeleton
 │   │   │   ├── members/            # Quản lý thành viên + mời
 │   │   │   ├── settings/           # Cài đặt workspace
-│   │   │   ├── integrations/       # Cấu hình tích hợp (Slack/Email/Notion)
+│   │   │       ├── integrations/       # Cấu hình tích hợp (Slack/Email/Notion)
+│   │       │   └── marketplace/    # Integration marketplace (grid + search + connect)
 │   │   │   └── workflows/
 │   │   │       ├── page.tsx        # Danh sách workflow
 │   │   │       └── [workflowId]/
@@ -87,6 +89,9 @@ src/
 │   │       │   ├── checkout/       # POST Stripe Checkout Session
 │   │       │   └── webhook/        # POST Stripe webhook (HMAC verify)
 │   │       ├── health/             # GET health check (DB + Redis)
+│   │       ├── ai/
+│   │       │   ├── generate-workflow/  # POST AI sinh workflow
+│   │       │   └── diagnose-error/     # POST AI chẩn đoán lỗi
 │   │       └── test/
 │   │           ├── run-workflow/   # Test endpoint Phase 2-4
 │   │           ├── phase5/         # Phase 5 test suite (14 tests)
@@ -100,7 +105,9 @@ src/
 │   ├── invite-form.tsx             # Form mời thành viên
 │   ├── workflow-list-client.tsx    # Danh sách + tạo + xoá workflow
 │   ├── workflow-canvas.tsx         # Canvas React Flow + Realtime + Presence
-│   ├── flow-node.tsx               # Custom node component
+│   ├── workflow-canvas-ai.tsx      # Canvas wrapper + AI Assistant bar
+│   ├── ai-assistant.tsx            # AI workflow generator modal
+│   ├── flow-node.tsx               # Custom node component (18 types)
 │   ├── node-config-panel.tsx       # Config panel (7 loại node)
 │   └── run-history.tsx             # Lịch sử chạy + log (Realtime)
 ├── lib/
@@ -118,7 +125,16 @@ src/
 │   ├── rate-limiter.ts             # In-memory rate limiter (4 tiers)
 │   ├── api-guard.ts                # withSecurity + validateBody helpers
 │   ├── audit-log.ts                # logAudit + helpers (login, CRUD, invite)
-│   └── error-tracking.ts           # Sentry-ready error capture
+│   ├── error-tracking.ts           # Sentry-ready error capture
+│   └── integrations/               # Phase 7.1: Integration framework
+│       ├── types.ts                # IntegrationProvider interface
+│       ├── registry.ts             # Provider registry + executeProviderNode
+│       ├── http.ts                 # HTTP Request (4 auth types)
+│       ├── google.ts               # Google Workspace (4 actions)
+│       ├── messaging.ts            # Telegram + Discord + Zalo + SMS
+│       ├── productivity.ts         # Airtable + Trello
+│       ├── data.ts                 # Transform + Database
+│       └── engine-types.ts         # Ctx type re-export
 └── middleware.ts                    # Auth check + security headers
 
 supabase/
@@ -280,6 +296,75 @@ public/
 
 ---
 
+### Phase 7: Growth & Scale (7.1 + 7.2) ✅
+
+**Mục tiêu**: Mở rộng integrations + AI assistant để tăng giá trị sản phẩm.
+
+#### 7.1: Integration Framework (10 providers)
+
+**Plugin architecture** — mỗi integration implement `IntegrationProvider` interface:
+
+```typescript
+interface IntegrationProvider {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  category: IntegrationCategory;
+  authType: "none" | "api_key" | "bearer" | "basic" | "oauth2" | "webhook_url";
+  configSchema: ConfigField[];
+  execute(ctx: IntegrationContext): Promise<IntegrationResult>;
+}
+```
+
+**10 Providers**:
+
+| Provider | Icon | Category | Auth | Chi tiết |
+|---|---|---|---|---|
+| HTTP Request | 🔗 | Development | None/Bearer/Basic/API-Key | REST API generic, timeout, custom headers |
+| Google Workspace | 📧 | Productivity | OAuth2 | Gmail send, Calendar event, Sheets append, Drive upload |
+| Telegram | ✈️ | Communication | Bot Token | sendMessage, HTML/Markdown |
+| Discord | 🎮 | Communication | Webhook URL | Message + embed (title, desc, color) |
+| Zalo OA | 💚 | Vietnam | Access Token | Gửi message user/group |
+| SMS (VN) | 📱 | Vietnam | API Key | VNPT / Viettel / Mobifone |
+| Airtable | 📊 | Productivity | API Key | Create, Update, Search records |
+| Trello | 📋 | Productivity | API Key + Token | Create card, Move card |
+| Data Transform | 🔄 | Data | None | Map, Filter, Aggregate, Parse, Stringify, Extract |
+| Database | 🗄️ | Data | API Key | Supabase PostgreSQL query, HTTP API |
+
+**Files**: `src/lib/integrations/` (types.ts, http.ts, google.ts, messaging.ts, productivity.ts, data.ts, registry.ts, engine-types.ts)
+
+**Engine integration**: 11 node types mới dispatch qua `executeProviderNode()` → provider registry.
+
+**Marketplace UI**: `/app/[id]/integrations/marketplace`
+- Grid 13 integration cards (10 new + Slack + Email + Notion)
+- Search + category filter (Giao tiếp, Sản xuất, Phát triển, Dữ liệu, Việt Nam)
+- Connect modal: dynamic form from `configSchema`, save to `/api/integrations`
+
+**Config panel**: Generic integration config (provider select, input node ref, dynamic fields).
+
+#### 7.2: AI Assistant
+
+| Feature | API | Chi tiết |
+|---|---|---|
+| Generate workflow | `POST /api/ai/generate-workflow` | Input: mô tả text → Output: nodes + edges JSON |
+| Diagnose error | `POST /api/ai/diagnose-error` | Input: run_id → Output: diagnosis + suggestions |
+| UI component | `ai-assistant.tsx` | Textarea → Generate → Preview → Apply to canvas |
+| LLM providers | OpenAI / DeepSeek | `OPENAI_API_KEY` hoặc `DEEPSEEK_API_KEY` |
+| Template fallback | — | Không cần API key: detect keywords (email, slack, zalo...) → sinh workflow |
+
+**LLM system prompt**: Biết 18 node types, sinh JSON {nodes, edges}, position auto, max 6 nodes.
+
+**Template engine**: Detect 8+ service keywords trong mô tả → tạo trigger + action nodes + edges.
+
+**UI**: Nút "✨ AI Assistant" trên canvas bar → modal với textarea → sinh → preview nodes → "Áp dụng vào canvas".
+
+**Env (optional)**: `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`
+
+**Tests**: 18/18 passed
+
+---
+
 ## Plan Limits
 
 | Gói | Members | Workflows | Storage |
@@ -310,6 +395,8 @@ Config: `src/lib/plan-limits.ts`
 | `STRIPE_WEBHOOK_SECRET` | Webhook signing secret | Billing |
 | `NEXT_PUBLIC_APP_URL` | Base URL (webhook redirect) | Billing |
 | `RESEND_API_KEY` | Resend API (email thật) | Optional |
+| `OPENAI_API_KEY` | OpenAI GPT-4o-mini (AI assistant) | AI |
+| `DEEPSEEK_API_KEY` | DeepSeek (AI, VN-friendly, rẻ hơn) | AI |
 | `SENTRY_DSN` | Sentry DSN (error tracking) | Optional |
 
 ---
@@ -371,6 +458,7 @@ npm start         # Production server
 |---|---|
 | `GET /api/test/phase5` | Phase 5: collab, presence, plan limits, UI (14 tests) |
 | `GET /api/test/phase6` | Phase 6: billing, security, perf, admin (16 tests) |
+| `GET /api/test/phase7` | Phase 7: integrations, AI assistant (18 tests) |
 | `POST /api/test/run-workflow` | Tạo + chạy workflow test |
 | `GET /api/health` | Health check (DB + Redis) |
 
@@ -428,6 +516,19 @@ npm start         # Production server
 | Method | Route | Mô tả |
 |---|---|---|
 | GET | `/api/health` | Health check (DB + Redis) |
+
+### AI
+| Method | Route | Mô tả |
+|---|---|---|
+| POST | `/api/ai/generate-workflow` | Sinh workflow từ mô tả (LLM + template) |
+| POST | `/api/ai/diagnose-error` | Chẩn đoán lỗi run (LLM + fallback) |
+
+### Test
+| Method | Route | Mô tả |
+|---|---|---|
+| GET | `/api/test/phase5` | Phase 5 tests (14) |
+| GET | `/api/test/phase6` | Phase 6 tests (16) |
+| GET | `/api/test/phase7` | Phase 7 tests (18) |
 
 ---
 
@@ -508,11 +609,15 @@ Tab A ←── isSavingRef=true (skip self-update)
   - [x] 6.3: Performance & SEO (loading, errors, PWA, OG)
   - [x] 6.4: Admin & Observability (dashboard, health, tracking)
   - [ ] 6.5: Deployment (Vercel, CI/CD, load test)
-- [ ] **Phase 7**: Mở rộng
-  - [ ] 50+ integrations (Google, Trello, Asana...)
-  - [ ] Multi-language (EN)
-  - [ ] Mobile app (React Native / PWA enhancement)
-  - [ ] AI assistant (gợi ý workflow từ mô tả)
+- [ ] **Phase 7**: Growth & Scale
+  - [x] 7.1: Integration Framework (10 providers + marketplace UI)
+  - [x] 7.2: AI Assistant (generate workflow + diagnose error)
+  - [ ] 7.3: Multi-language (EN)
+  - [ ] 7.4: Mobile Enhancement (PWA + touch)
+  - [ ] 7.5: Advanced Workflows (sub-workflows, parallel, loop)
+  - [ ] 7.6: Analytics & Reporting
+  - [ ] 7.7: Team Collaboration Advanced
+  - [ ] 7.8: Enterprise Features (SSO, SCIM, API)
 
 ---
 

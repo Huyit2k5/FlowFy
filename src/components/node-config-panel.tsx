@@ -403,6 +403,62 @@ export default function NodeConfigPanel({ node, onSave, onDelete }: Props) {
         </div>
       )}
 
+      {/* Phase 7.1: Generic integration config for new node types */}
+      {["integration", "http", "google", "telegram", "discord", "zalo", "sms", "airtable", "trello", "transform", "database"].includes(node.type) && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            {node.type === "integration" ? "Integration" : node.type.charAt(0).toUpperCase() + node.type.slice(1)} Config
+          </p>
+          {/* Dynamic fields based on node.data config keys */}
+          {Object.entries(node.data).filter(([k]) => !["nodeType", "label", "providerId", "config", "inputNode"].includes(k)).map(([key, val]) => (
+            <div key={key}>
+              <label className="mb-1 block text-xs font-medium text-zinc-600">{key}</label>
+              <input
+                type="text"
+                value={String(val ?? "")}
+                onChange={(e) => set(key, e.target.value)}
+                className={inputCls}
+              />
+            </div>
+          ))}
+          {/* Provider ID (for generic integration node) */}
+          {node.type === "integration" && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-zinc-600">Provider</label>
+              <select
+                value={String(data.providerId ?? "")}
+                onChange={(e) => set("providerId", e.target.value)}
+                className={inputCls}
+              >
+                <option value="">— Chọn —</option>
+                <option value="http">HTTP Request</option>
+                <option value="google">Google Workspace</option>
+                <option value="telegram">Telegram</option>
+                <option value="discord">Discord</option>
+                <option value="zalo">Zalo OA</option>
+                <option value="sms">SMS (VN)</option>
+                <option value="airtable">Airtable</option>
+                <option value="trello">Trello</option>
+                <option value="transform">Data Transform</option>
+                <option value="database">Database</option>
+              </select>
+            </div>
+          )}
+          {/* Input node reference */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-600">Input (node ID trước)</label>
+            <input
+              type="text"
+              value={String(data.inputNode ?? "")}
+              onChange={(e) => set("inputNode", e.target.value)}
+              placeholder="VD: webhook_1"
+              className={inputCls}
+            />
+            <p className="mt-0.5 text-[11px] text-zinc-400">ID của node trước để lấy output làm input</p>
+          </div>
+        </div>
+      )}
+
       <div className="mt-auto flex flex-col gap-2 pt-4">
         <button
           type="button"

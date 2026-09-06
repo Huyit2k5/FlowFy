@@ -12,6 +12,17 @@ export const NODE_TYPES = [
   "notion",
   "condition",
   "delay",
+  "integration",
+  "transform",
+  "http",
+  "google",
+  "telegram",
+  "discord",
+  "zalo",
+  "sms",
+  "airtable",
+  "trello",
+  "database",
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 

@@ -4,6 +4,7 @@ import { getCurrentWorkspace } from "@/lib/workspaces";
 import { getWorkflow, listWorkflowRuns } from "@/lib/workflow-db";
 import WorkflowCanvas from "@/components/workflow-canvas";
 import RunHistory from "@/components/run-history";
+import WorkflowCanvasWithAI from "@/components/workflow-canvas-ai";
 
 export default async function WorkflowEditorPage({
   params,
@@ -46,7 +47,7 @@ export default async function WorkflowEditorPage({
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex-1 overflow-hidden">
           <ReactFlowProvider>
-            <WorkflowCanvas workspaceId={id} workflow={workflow} />
+            <WorkflowCanvasWithAI workspaceId={id} workflow={workflow} />
           </ReactFlowProvider>
         </div>
 
