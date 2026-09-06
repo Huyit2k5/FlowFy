@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ReactFlow,
@@ -26,6 +26,7 @@ import type {
   WorkflowWithNodes,
   NodeType,
 } from "@/lib/workflow-types";
+import { createClient } from "@/lib/supabase/browser";
 
 interface Props {
   workspaceId: string;
@@ -58,9 +59,17 @@ function fromFlowNode(n: Node): WorkflowNode {
   };
 }
 
+interface PresenceUser {
+  user_id: string;
+  username: string;
+  avatar_url?: string;
+  last_seen: string;
+}
+
 export default function WorkflowCanvas({ workflow }: Props) {
   const router = useRouter();
   const { screenToFlowPosition } = useReactFlow();
+  const supabase = createClient();
 
   const [nodes, setNodes] = useState<Node[]>(workflow.nodes.map(toFlowNode));
   const [edges, setEdges] = useState<Edge[]>(workflow.edges);
@@ -72,7 +81,93 @@ export default function WorkflowCanvas({ workflow }: Props) {
   const [scheduleOn, setScheduleOn] = useState<boolean>(
     (workflow as { schedule_enabled?: boolean }).schedule_enabled ?? false
   );
+  const [remoteUsers, setRemoteUsers] = useState<PresenceUser[]>([]);
+  const [remoteUpdate, setRemoteUpdate] = useState(false);
   const nodeCounter = useRef(0);
+  const isSavingRef = useRef(false);
+
+  // ---- Real-time: subscribe workflow_nodes changes ----
+  useEffect(() => {
+    const channel = supabase
+      .channel(`canvas-${workflow.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "workflow_nodes",
+          filter: `workflow_id=eq.${workflow.id}`,
+        },
+        async (payload) => {
+          // Bỏ qua nếu chính mình vừa lưu
+          if (isSavingRef.current) return;
+          const { nodes: rawNodes, edges: rawEdges } = payload.new as {
+            nodes: WorkflowNode[];
+            edges: { id: string; source: string; target: string }[];
+          };
+          if (rawNodes && rawEdges) {
+            setNodes(rawNodes.map(toFlowNode));
+            setEdges(rawEdges.map((e) => ({ ...e, animated: true, id: e.id })));
+            setDirty(false);
+            setRemoteUpdate(true);
+            setTimeout(() => setRemoteUpdate(false), 3000);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [workflow.id, supabase]);
+
+  // ---- Real-time: Presence (ai đang online trên canvas) ----
+  useEffect(() => {
+    const channel = supabase.channel(`presence-${workflow.id}`);
+
+    channel.on("presence", { event: "sync" }, () => {
+      const state = channel.presenceState() as Record<string, PresenceUser[]>;
+      setRemoteUsers(Object.values(state).flat());
+    });
+
+    channel.on("presence", { event: "join" }, (payload) => {
+      const p = (payload as unknown) as { user: PresenceUser };
+      setRemoteUsers((prev) => [
+        ...prev.filter((u) => u.user_id !== p.user.user_id),
+        p.user,
+      ]);
+    });
+
+    channel.on("presence", { event: "leave" }, (payload) => {
+      const p = (payload as unknown) as { user: PresenceUser };
+      setRemoteUsers((prev) => prev.filter((u) => u.user_id !== p.user.user_id));
+    });
+
+    channel.subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, avatar_url")
+            .eq("id", user.id)
+            .maybeSingle();
+          await channel.track({
+            user_id: user.id,
+            username: (profile as { full_name?: string } | null)?.full_name ?? "User",
+            avatar_url: (profile as { avatar_url?: string } | null)?.avatar_url,
+            last_seen: new Date().toISOString(),
+          } satisfies PresenceUser);
+        }
+      }
+    });
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [workflow.id, supabase]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((nds) => applyNodeChanges(changes, nds));
@@ -143,6 +238,7 @@ export default function WorkflowCanvas({ workflow }: Props) {
   // Lưu workflow vào DB
   const saveWorkflow = async () => {
     setSaving(true);
+    isSavingRef.current = true;
     const res = await fetch(`/api/workflows/${workflow.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -152,6 +248,7 @@ export default function WorkflowCanvas({ workflow }: Props) {
       }),
     });
     setSaving(false);
+    setTimeout(() => { isSavingRef.current = false; }, 1000);
     if (res.ok) {
       setDirty(false);
       setRunResult("✓ Đã lưu workflow.");
@@ -238,6 +335,29 @@ export default function WorkflowCanvas({ workflow }: Props) {
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold">{workflow.name}</h2>
           {dirty && <span className="text-xs text-amber-600">• chưa lưu</span>}
+          {remoteUpdate && (
+            <span className="animate-pulse rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+              ⚡ Người khác vừa cập nhật
+            </span>
+          )}
+          {remoteUsers.length > 0 && (
+            <div className="flex -space-x-1.5">
+              {remoteUsers.slice(0, 3).map((u) => (
+                <span
+                  key={u.user_id}
+                  title={u.username}
+                  className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-brand/20 text-[10px] font-bold text-brand"
+                >
+                  {u.username?.[0]?.toUpperCase() ?? "U"}
+                </span>
+              ))}
+              {remoteUsers.length > 3 && (
+                <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-zinc-100 text-[10px] font-medium text-zinc-500">
+                  +{remoteUsers.length - 3}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
