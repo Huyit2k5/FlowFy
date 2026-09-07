@@ -140,7 +140,7 @@ export default function AiAgentChat({ workspaceId, workflowId, onApplyWorkflow, 
                   onClick={() => setInput("Tạo workflow: khi nhận webhook đơn hàng mới thì gửi Slack cho team và tạo task Trello")}
                   className="block w-full rounded-lg bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-600 hover:bg-zinc-100"
                 >
-                  "Khi nhận đơn hàng → gửi Slack + tạo Trello"
+                  {"Khi nhận đơn hàng → gửi Slack + tạo Trello"}
                 </button>
                 <button
                   onClick={() => setInput("Tạo workflow: khi nhận webhook, nếu order.total > 5000000 thì gửi Zalo cho manager, nếu không thì gửi email cho khách")}
@@ -152,7 +152,7 @@ export default function AiAgentChat({ workspaceId, workflowId, onApplyWorkflow, 
                   onClick={() => setInput("Tạo workflow: mỗi sáng 8h gửi email tổng hợp đơn hàng trong ngày cho team")}
                   className="block w-full rounded-lg bg-zinc-50 px-3 py-2 text-left text-xs text-zinc-600 hover:bg-zinc-100"
                 >
-                  "Mỗi sáng 8h → email tổng hợp đơn hàng"
+                  {"Mỗi sáng 8h → email tổng hợp đơn hàng"}
                 </button>
               </div>
               <div className="mt-3 flex flex-wrap justify-center gap-1.5">

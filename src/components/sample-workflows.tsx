@@ -57,7 +57,7 @@ export default function SampleWorkflows({ workspaceId }: Props) {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  async function useSample(id: string) {
+  async function handleUseSample(id: string) {
     setLoading(id);
     setError("");
     try {
@@ -111,7 +111,7 @@ export default function SampleWorkflows({ workspaceId }: Props) {
           {SAMPLES.map((s) => (
             <button
               key={s.id}
-              onClick={() => useSample(s.id)}
+              onClick={() => handleUseSample(s.id)}
               disabled={loading !== null}
               className="group rounded-xl border border-zinc-200 p-4 text-left transition hover:border-brand/50 hover:shadow-md disabled:opacity-50"
             >

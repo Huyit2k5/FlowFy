@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useCallback } from "react";
 
 interface Props {
   id: string;
@@ -9,17 +9,15 @@ interface Props {
 }
 
 export function FeatureTip({ id, text, children }: Props) {
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !localStorage.getItem("flowly_tip_" + id);
+  });
 
-  useEffect(() => {
-    const seen = localStorage.getItem("flowly_tip_" + id);
-    if (!seen) setShow(true);
-  }, [id]);
-
-  function dismiss() {
+  const dismiss = useCallback(() => {
     setShow(false);
     localStorage.setItem("flowly_tip_" + id, "1");
-  }
+  }, [id]);
 
   return (
     <div className="relative">

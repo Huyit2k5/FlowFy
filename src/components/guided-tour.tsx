@@ -63,6 +63,7 @@ export default function GuidedTour({ onComplete }: Props) {
     const el = document.getElementById(TOUR_STEPS[step].target);
     if (el) {
       const r = el.getBoundingClientRect();
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- DOM measurement requires post-render
       setRect(r);
     } else {
       setRect(null);
