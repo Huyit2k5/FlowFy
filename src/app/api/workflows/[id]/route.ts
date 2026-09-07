@@ -6,6 +6,7 @@ import {
   saveWorkflowNodes,
   getWorkflow,
 } from "@/lib/workflow-db";
+import { checkWorkflowAccess } from "@/lib/rbac";
 import type { WorkflowNode, WorkflowEdge } from "@/lib/workflow-types";
 
 export async function GET(
@@ -34,6 +35,16 @@ export async function PUT(
 
   const { id } = await params;
   const body = await request.json();
+
+  const wf = await getWorkflow(id);
+  if (!wf) {
+    return NextResponse.json({ error: "Không tìm thấy workflow" }, { status: 404 });
+  }
+
+  const access = await checkWorkflowAccess(user.id, wf.workspace_id, id, "edit");
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.reason }, { status: 403 });
+  }
 
   try {
     // Cập nhật metadata
@@ -78,6 +89,17 @@ export async function DELETE(
   }
 
   const { id } = await params;
+
+  const wf = await getWorkflow(id);
+  if (!wf) {
+    return NextResponse.json({ error: "Không tìm thấy workflow" }, { status: 404 });
+  }
+
+  const access = await checkWorkflowAccess(user.id, wf.workspace_id, id, "admin");
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.reason }, { status: 403 });
+  }
+
   try {
     await deleteWorkflow(id);
     return NextResponse.json({ ok: true });

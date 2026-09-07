@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { getPlanLimits } from "@/lib/plan-limits";
+import { SecuritySettings } from "@/components/security-settings";
 
 export default async function SettingsPage({
   params,
@@ -14,13 +15,16 @@ export default async function SettingsPage({
   const supabase = await createClient();
   const limits = getPlanLimits(ws.plan);
 
-  const [memberCount, workflowCount] = await Promise.all([
+  const [memberCount, workflowCount, secData] = await Promise.all([
     supabase.from("members").select("id", { count: "exact", head: true }).eq("workspace_id", id).eq("status", "active"),
     supabase.from("workflows").select("id", { count: "exact", head: true }).eq("workspace_id", id),
+    supabase.from("workspace_security").select("*").eq("workspace_id", id).maybeSingle(),
   ]);
 
   const membersUsed = memberCount.count ?? 0;
   const workflowsUsed = workflowCount.count ?? 0;
+  const security = (secData.data as Record<string, unknown> | null) ?? null;
+  const isEnterprise = ws.plan === "enterprise";
 
   return (
     <div>
@@ -68,10 +72,17 @@ export default async function SettingsPage({
         </div>
 
         <div className="rounded-xl border border-zinc-200 bg-white p-5">
-          <h2 className="text-sm font-semibold">Tích hợp</h2>
-          <p className="mt-3 text-sm text-zinc-500">
-            Cấu hình webhook, Slack, email và Notion sẽ được thêm ở Phase 4.
-          </p>
+          <h2 className="text-sm font-semibold">An ninh & Enterprise</h2>
+          {!isEnterprise ? (
+            <p className="mt-3 text-sm text-zinc-500">
+              Tính năng SSO, 2FA, IP allowlist, và data retention chỉ có trong gói Enterprise.
+            </p>
+          ) : (
+            <SecuritySettings
+              workspaceId={id}
+              initial={security ?? {}}
+            />
+          )}
         </div>
       </div>
     </div>

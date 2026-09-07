@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
+import crypto from "crypto";
 import type { Workflow, WorkflowNode, WorkflowEdge } from "./workflow-types";
 import { executeProviderNode } from "./integrations/registry";
 
@@ -16,6 +17,7 @@ export interface ExecutionContext {
   supabase: SupabaseClient;
   loopIndex?: number;
   loopItem?: unknown;
+  hmacSecret?: string;
 }
 
 export interface ExecutionResult {
@@ -64,6 +66,10 @@ function resolveTemplateDeep(obj: unknown, data: Record<string, unknown>): unkno
   return obj;
 }
 
+function hmacSign(secret: string, body: string): string {
+  return crypto.createHmac("sha256", secret).update(body).digest("hex");
+}
+
 // ============================================================
 // Node runners
 // ============================================================
@@ -80,6 +86,11 @@ const nodeRunners: Record<string, (node: WorkflowNode, ctx: ExecutionContext) =>
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout * 1000);
     try {
+      const bodyStr = method !== "GET" ? (body ?? "") : "";
+      if (ctx.hmacSecret && bodyStr) {
+        headers["X-Flowly-Signature"] = hmacSign(ctx.hmacSecret, bodyStr);
+        headers["X-Flowly-Timestamp"] = String(Date.now());
+      }
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json", ...headers },
@@ -368,6 +379,12 @@ export async function executeWorkflow(opts: {
     // Load integrations
     const { data: intData } = await sb.from("integrations").select("*").eq("workspace_id", workspaceId);
     ctx.data.__integrations = (intData || []).map((i) => ({ provider: i.provider, config: i.config || {} }));
+
+    // Load HMAC secret for webhook signing
+    try {
+      const { data: secData } = await sb.from("workspace_security").select("hmac_secret").eq("workspace_id", workspaceId).maybeSingle();
+      if (secData?.hmac_secret) ctx.hmacSecret = secData.hmac_secret;
+    } catch { /* table may not exist yet */ }
 
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
     const edgesFrom = (sourceId: string) => edges.filter((e) => e.source === sourceId);

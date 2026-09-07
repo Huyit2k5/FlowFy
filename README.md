@@ -10,7 +10,7 @@ Giao diện tiếng Việt, giá VND, hỗ trợ 24/7.
 
 Flowly là SaaS giúp đội ngũ tự động hóa quy trình lặp lại: nhận webhook → xử lý → gửi Slack/Email/Notion/Telegram/Zalo/Google/Airtable/Trello, chạy định kỳ theo cron, cộng tác realtime trên canvas, AI sinh workflow từ mô tả, thanh toán subscription qua Stripe.
 
-**Hoàn thành: Phase 1–7.5** (Auth, Workflow Engine, Webhook/Schedule, Integrations, Real-time Collab, Billing/Security/Performance/Admin, Integration Framework + AI Assistant + Advanced Workflows).
+**Hoàn thành: Phase 1–7.8** (Auth, Workflow Engine, Webhook/Schedule, Integrations, Real-time Collab, Billing/Security/Performance/Admin, Integration Framework, AI Assistant, Advanced Workflows, Conditional Branching, Analytics, Team Collaboration, Enterprise).
 
 ---
 
@@ -58,10 +58,13 @@ src/
 │   │   │   ├── page.tsx            # Dashboard tổng quan
 │   │   │   ├── layout.tsx          # App shell (sidebar + header)
 │   │   │   ├── loading.tsx         # Dashboard loading skeleton
+│   │   │   ├── analytics/          # Analytics dashboard (KPI + charts)
+│   │   │   ├── activity/           # Activity feed (audit logs)
+│   │   │   ├── integrations/
+│   │   │   │   └── marketplace/    # Integration marketplace
 │   │   │   ├── members/            # Quản lý thành viên + mời
-│   │   │   ├── settings/           # Cài đặt workspace
-│   │   │       ├── integrations/       # Cấu hình tích hợp (Slack/Email/Notion)
-│   │       │   └── marketplace/    # Integration marketplace (grid + search + connect)
+│   │   │   ├── settings/           # Cài đặt + Enterprise security
+│   │   │   ├── templates/          # Workflow template gallery
 │   │   │   └── workflows/
 │   │   │       ├── page.tsx        # Danh sách workflow
 │   │   │       └── [workflowId]/
@@ -73,29 +76,49 @@ src/
 │   │       │   └── signout/        # POST đăng xuất
 │   │       ├── workspaces/
 │   │       │   ├── route.ts        # GET/POST workspace
-│   │       │   └── invites/
-│   │       │       ├── route.ts    # POST mời thành viên (plan limit)
-│   │       │       └── accept/     # POST xác nhận lời mời
+│   │       │   ├── invites/
+│   │       │   │   ├── route.ts    # POST mời thành viên (plan limit)
+│   │       │   │   └── accept/     # POST xác nhận lời mời
+│   │       │   └── [id]/
+│   │       │       ├── security/   # GET/PUT enterprise security config
+│   │       │       ├── audit-logs/ # GET export (CSV/JSON, filters)
+│   │       │       ├── export/     # GET/POST data export/import
+│   │       │       ├── retention/  # POST trigger cleanup
+│   │       │       ├── usage/      # GET usage + alerts
+│   │       │       └── backup/     # GET/POST backup/restore
 │   │       ├── workflows/
 │   │       │   ├── route.ts        # GET/POST (Zod + plan limit + audit log)
 │   │       │   └── [id]/
-│   │       │       ├── route.ts    # GET/PUT/DELETE
-│   │       │       ├── run/        # POST chạy workflow
+│   │       │       ├── route.ts    # GET/PUT/DELETE (RBAC enforced)
+│   │       │       ├── run/        # POST chạy workflow (RBAC: runner)
 │   │       │       ├── runs/       # GET lịch sử
-│   │       │       └── schedule/   # PUT bật/tắt schedule (BullMQ)
+│   │       │       ├── schedule/   # PUT bật/tắt schedule (BullMQ)
+│   │       │       ├── permissions/ # GET/PUT/DELETE (RBAC: admin)
+│   │       │       └── nodes/[nodeId]/comments/  # GET/POST/DELETE
+│   │       ├── templates/
+│   │       │   ├── route.ts        # GET/POST/DELETE
+│   │       │   └── [id]/duplicate/ # POST → new workflow
+│   │       ├── activity/           # GET activity feed
+│   │       ├── analytics/          # GET aggregated analytics
 │   │       ├── integrations/       # CRUD tích hợp (Zod validation)
 │   │       ├── webhooks/[id]/      # Public webhook trigger (service role)
 │   │       ├── billing/
 │   │       │   ├── checkout/       # POST Stripe Checkout Session
 │   │       │   └── webhook/        # POST Stripe webhook (HMAC verify)
-│   │       ├── health/             # GET health check (DB + Redis)
+│   │       ├── health/             # GET health check (DB + version)
 │   │       ├── ai/
 │   │       │   ├── generate-workflow/  # POST AI sinh workflow
 │   │       │   └── diagnose-error/     # POST AI chẩn đoán lỗi
 │   │       └── test/
 │   │           ├── run-workflow/   # Test endpoint Phase 2-4
 │   │           ├── phase5/         # Phase 5 test suite (14 tests)
-│   │           └── phase6/         # Phase 6 test suite (16 tests)
+│   │           ├── phase6/         # Phase 6 test suite (16 tests)
+│   │           ├── phase7/         # Phase 7.1+7.2 (18 tests)
+│   │           ├── phase73/        # Phase 7.3 conditional (15 tests)
+│   │           ├── phase75/        # Phase 7.5 advanced (18 tests)
+│   │           ├── phase76/        # Phase 7.6 analytics (15 tests)
+│   │           ├── phase77/        # Phase 7.7 collaboration (15 tests)
+│   │           └── phase78/        # Phase 7.8 enterprise (20 tests)
 │   └── ...
 ├── components/
 │   ├── app-shell.tsx               # Sidebar + header + plan badge + upgrade
@@ -107,19 +130,25 @@ src/
 │   ├── workflow-canvas.tsx         # Canvas React Flow + Realtime + Presence
 │   ├── workflow-canvas-ai.tsx      # Canvas wrapper + AI Assistant bar
 │   ├── ai-assistant.tsx            # AI workflow generator modal
-│   ├── flow-node.tsx               # Custom node component (18 types)
-│   ├── node-config-panel.tsx       # Config panel (7 loại node)
-│   └── run-history.tsx             # Lịch sử chạy + log (Realtime)
+│   ├── flow-node.tsx               # Custom node component (22 types)
+│   ├── node-config-panel.tsx       # Config panel (all node types)
+│   ├── run-history.tsx             # Lịch sử chạy + log (Realtime)
+│   ├── analytics-charts.tsx        # SVG BarChart + StatCard
+│   ├── node-comments.tsx           # Node comment thread UI
+│   ├── workflow-permissions.tsx    # Per-workflow RBAC UI (5 roles)
+│   └── security-settings.tsx       # Enterprise security panel
 ├── lib/
 │   ├── supabase/
 │   │   ├── browser.ts              # Supabase client (browser)
 │   │   ├── server.ts               # Supabase client (server, cookies)
 │   │   └── middleware.ts           # Update session token
 │   ├── workspaces.ts               # Helper: getWorkspaces, getCurrentWorkspace
-│   ├── workflow-types.ts           # Types + Zod schemas (7 node types)
+│   ├── workflow-types.ts           # Types + Zod schemas (22 node types)
 │   ├── workflow-db.ts              # CRUD: getWorkflow, saveWorkflowNodes, ...
-│   ├── workflow-engine.ts          # Execution engine (7 runners + retry)
+│   ├── workflow-engine.ts          # Execution engine (22 runners + retry + HMAC)
 │   ├── workflow-queue.ts           # BullMQ: schedule + repeat jobs
+│   ├── rbac.ts                     # RBAC: 5 roles, hierarchy, checkWorkflowAccess
+│   ├── ip-allowlist.ts             # CIDR matching (IPv4)
 │   ├── plan-limits.ts              # Plan limits (free/pro/enterprise)
 │   ├── billing-helpers.ts          # canCreateWorkflow, canAddMember
 │   ├── rate-limiter.ts             # In-memory rate limiter (4 tiers)
@@ -143,7 +172,9 @@ supabase/
     ├── 003_webhook_schedule.sql    # webhook_token, schedule, schedule_enabled
     ├── 004_realtime.sql            # Add workflow_runs + run_logs to publication
     ├── 005_realtime_nodes.sql      # Add workflow_nodes to publication
-    └── 006_audit_logs.sql          # Audit log table + RLS + indexes
+    ├── 006_audit_logs.sql          # Audit log table + RLS + indexes
+    ├── 007_collab.sql              # Templates + comments + permissions (Phase 7.7)
+    └── 008_enterprise.sql          # workspace_security + 5-role migration (Phase 7.8)
 
 public/
 └── manifest.json                   # PWA manifest
@@ -153,7 +184,7 @@ public/
 
 ## Database Schema
 
-10 bảng chính:
+13 bảng chính:
 
 | Table | Mô tả |
 |---|---|
@@ -164,11 +195,15 @@ public/
 | `workflow_nodes` | Nodes + edges trên canvas (jsonb) |
 | `workflow_runs` | Mỗi lần chạy (status, trigger, started_at, finished_at, error) |
 | `run_logs` | Log từng bước trong 1 run (node_id, status, input, output, error) |
-| `integrations` | Cấu hình tích hợp workspace (Slack, Email, Notion) |
+| `integrations` | Cấu hình tích hợp workspace (Slack, Email, Notion, 10+ providers) |
 | `invitations` | Lời mời thành viên (email, role, token, expires) |
 | `audit_logs` | Log hành động (user, action, entity, metadata, ip) |
+| `workflow_templates` | Template canvas (nodes, edges) — duplicate → workflow |
+| `node_comments` | Comment trên node (thread) |
+| `workflow_permissions` | Per-workflow RBAC (5 roles: viewer→admin) |
+| `workspace_security` | Enterprise: SSO, 2FA, IP allowlist, HMAC, retention, alerts |
 
-**Security**: Row Level Security (RLS) trên mọi bảng. User chỉ truy cập dữ liệu workspace mình là thành viên.
+**Security**: Row Level Security (RLS) trên mọi bảng. User chỉ truy cập dữ liệu workspace mình là thành viên. Enterprise settings chỉ owner/admin sửa được.
 
 **Realtime publication** (`supabase_realtime`): `workflows`, `workflow_nodes`, `workflow_runs`, `run_logs`.
 
@@ -386,6 +421,79 @@ interface IntegrationProvider {
 
 **Tests**: 18/18 passed
 
+#### 7.3: Conditional Branching (If/Else trên canvas)
+
+| Feature | Chi tiết |
+|---------|----------|
+| 2 source handles | `condition` + `condition_group` nodes có 2 output: **True** (xanh lá) + **False** (đỏ) |
+| Labeled edges | `WorkflowEdge.label: "true" \| "false"` — engine follow đúng nhánh |
+| Canvas | Kéo từ handle True → edge xanh, handle False → edge đỏ. Label hiển thị trên edge |
+| Engine | Sau condition node, đọc edge label từ source handle → đi đúng nhánh |
+
+**Canvas changes**: `onConnect` captures `sourceHandle` → sets `edge.label`. Edge styled by label color.
+
+**Tests**: 15/15 passed
+
+#### 7.6: Analytics & Reporting
+
+| Feature | API/UI | Chi tiết |
+|---------|--------|----------|
+| KPI cards | `/app/[id]/analytics` | Total runs, success rate, avg duration, active workflows |
+| Time series chart | SVG BarChart | Runs per day (last 14 days) |
+| Top workflows | Table | 5 workflows with most runs + success rate |
+| Integration usage | Horizontal bars | Count per provider |
+| Run history filter | `?status=completed\|failed\|running` | Filter by status |
+| CSV export | `?export=csv` | Download run history as CSV |
+| API | `GET /api/analytics?workspace_id=...` | Aggregated queries |
+
+**Charts**: Pure SVG (no recharts/chart.js dependency).
+
+**Tests**: 15/15 passed
+
+#### 7.7: Team Collaboration Advanced
+
+| Feature | API | Chi tiết |
+|---------|-----|----------|
+| Workflow Templates | `GET/POST/DELETE /api/templates` | Save canvas as template, duplicate → new workflow |
+| Node Comments | `GET/POST/DELETE /api/workflows/[id]/nodes/[nodeId]/comments` | Comment trên từng node, thread UI |
+| Activity Feed | `GET /api/activity?workspace_id=...` | Audit logs formatted as feed (who did what, when) |
+| Per-workflow Permissions | `GET/PUT/DELETE /api/workflows/[id]/permissions` | Gán role per user per workflow |
+| Templates UI | `/app/[id]/templates` | Grid template cards + "Dùng template" → duplicate |
+| Activity UI | `/app/[id]/activity` | Timeline feed |
+| Comments UI | `node-comments.tsx` | Thread bên cạnh config panel |
+
+**Migration**: `007_collab.sql` (3 tables: `workflow_templates`, `node_comments`, `workflow_permissions`)
+
+**Tests**: 15/15 passed
+
+#### 7.8: Enterprise Features
+
+| Feature | API/UI | Chi tiết |
+|---------|--------|----------|
+| **Advanced RBAC** | `GET/PUT/DELETE /api/workflows/[id]/permissions` | 5 roles: viewer → commenter → runner → editor → admin. Hierarchy enforcement on all workflow routes |
+| **SSO / SAML** | Settings UI + `PUT /api/workspaces/[id]/security` | Config: provider (Google/Azure/Okta/Custom), client_id, client_secret, redirect_uri |
+| **Enforced 2FA** | Settings toggle | `enforce_2fa: boolean` per workspace |
+| **IP Allowlist** | Settings input + `ip-allowlist.ts` | CIDR matching (IPv4), comma-separated, empty = allow all |
+| **HMAC Webhook Signing** | Engine auto-sign | `X-Flowly-Signature` (HMAC-SHA256) + `X-Flowly-Timestamp` on outbound webhooks |
+| **Usage Alerts** | `GET /api/workspaces/[id]/usage` | 80%/95% threshold alerts, quota override per workspace |
+| **Audit Log Export** | `GET /api/workspaces/[id]/audit-logs?format=csv` | CSV/JSON export, filters: from/to/action/user |
+| **Data Retention** | `POST /api/workspaces/[id]/retention` | Auto-purge run logs + runs after N days, archive inactive workflows |
+| **Data Export/Import** | `GET/POST /api/workspaces/[id]/export` | Full workspace JSON export + import/restore |
+| **Health Check** | `GET /api/health` | DB latency, status (healthy/degraded), version |
+| **Backup/Restore** | `GET/POST /api/workspaces/[id]/backup` | Export-based backup + restore |
+| **Security Settings UI** | `/app/[id]/settings` (Enterprise only) | All toggles + inputs in one panel |
+
+**RBAC enforcement points**:
+- `PUT /api/workflows/[id]` → requires `editor`
+- `DELETE /api/workflows/[id]` → requires `admin`
+- `POST /api/workflows/[id]/run` → requires `runner`
+- `PUT/DELETE /api/workflows/[id]/permissions` → requires `admin`
+- Workspace security settings → requires workspace `owner`/`admin`
+
+**Migration**: `008_enterprise.sql` (workspace_security table + 5-role migration)
+
+**Tests**: 20/20 passed
+
 ---
 
 ## Plan Limits
@@ -461,6 +569,8 @@ EOF
 #   - supabase/migrations/004_realtime.sql
 #   - supabase/migrations/005_realtime_nodes.sql
 #   - supabase/migrations/006_audit_logs.sql
+#   - supabase/migrations/007_collab.sql
+#   - supabase/migrations/008_enterprise.sql
 
 # 5. Chạy dev server
 npm run dev
@@ -481,10 +591,14 @@ npm start         # Production server
 |---|---|
 | `GET /api/test/phase5` | Phase 5: collab, presence, plan limits, UI (14 tests) |
 | `GET /api/test/phase6` | Phase 6: billing, security, perf, admin (16 tests) |
-| `GET /api/test/phase7` | Phase 7: integrations, AI assistant (18 tests) |
+| `GET /api/test/phase7` | Phase 7.1+7.2: integrations, AI assistant (18 tests) |
+| `GET /api/test/phase73` | Phase 7.3: conditional branching (15 tests) |
 | `GET /api/test/phase75` | Phase 7.5: advanced workflows (18 tests) |
+| `GET /api/test/phase76` | Phase 7.6: analytics & reporting (15 tests) |
+| `GET /api/test/phase77` | Phase 7.7: team collaboration (15 tests) |
+| `GET /api/test/phase78` | Phase 7.8: enterprise features (20 tests) |
 | `POST /api/test/run-workflow` | Tạo + chạy workflow test |
-| `GET /api/health` | Health check (DB + Redis) |
+| `GET /api/health` | Health check (DB + version) |
 
 ---
 
@@ -504,6 +618,15 @@ npm start         # Production server
 | POST | `/api/workspaces` | Tạo workspace |
 | POST | `/api/workspaces/invites` | Mời thành viên (plan limit) |
 | POST | `/api/workspaces/invites/accept` | Accept invitation |
+| GET | `/api/workspaces/[id]/security` | Enterprise security config |
+| PUT | `/api/workspaces/[id]/security` | Update security (SSO, 2FA, IP, HMAC, retention) |
+| GET | `/api/workspaces/[id]/audit-logs` | Export audit logs (CSV/JSON, filters) |
+| GET | `/api/workspaces/[id]/export` | Export full workspace (JSON) |
+| POST | `/api/workspaces/[id]/export` | Import workspace data |
+| POST | `/api/workspaces/[id]/retention` | Trigger retention cleanup |
+| GET | `/api/workspaces/[id]/usage` | Usage + alerts (80%/95%) |
+| GET | `/api/workspaces/[id]/backup` | Backup info |
+| POST | `/api/workspaces/[id]/backup` | Restore from backup JSON |
 
 ### Workflows
 | Method | Route | Mô tả |
@@ -511,12 +634,32 @@ npm start         # Production server
 | GET | `/api/workflows` | List (by workspace) |
 | POST | `/api/workflows` | Tạo (Zod + plan limit + audit) |
 | GET | `/api/workflows/[id]` | Get + nodes |
-| PUT | `/api/workflows/[id]` | Update metadata / nodes |
-| DELETE | `/api/workflows/[id]` | Xoá |
-| POST | `/api/workflows/[id]/run` | Chạy workflow |
+| PUT | `/api/workflows/[id]` | Update metadata / nodes (RBAC: editor) |
+| DELETE | `/api/workflows/[id]` | Xoá (RBAC: admin) |
+| POST | `/api/workflows/[id]/run` | Chạy workflow (RBAC: runner) |
 | GET | `/api/workflows/[id]/runs` | Lịch sử |
 | PUT | `/api/workflows/[id]/schedule` | Bật/tắt schedule |
 | GET | `/api/workflows/runs/[runId]/logs` | Log chi tiết |
+| GET | `/api/workflows/[id]/permissions` | List permissions |
+| PUT | `/api/workflows/[id]/permissions` | Set permission (RBAC: admin) |
+| DELETE | `/api/workflows/[id]/permissions?id=` | Remove permission (RBAC: admin) |
+| GET | `/api/workflows/[id]/nodes/[nodeId]/comments` | List node comments |
+| POST | `/api/workflows/[id]/nodes/[nodeId]/comments` | Add comment |
+| DELETE | `/api/workflows/[id]/nodes/[nodeId]/comments?id=` | Delete comment |
+
+### Templates & Collaboration
+| Method | Route | Mô tả |
+|---|---|---|
+| GET | `/api/templates` | List templates (by workspace) |
+| POST | `/api/templates` | Create template |
+| DELETE | `/api/templates?id=` | Delete template |
+| POST | `/api/templates/[id]/duplicate` | Duplicate → new workflow |
+| GET | `/api/activity?workspace_id=` | Activity feed (audit logs) |
+
+### Analytics
+| Method | Route | Mô tả |
+|---|---|---|
+| GET | `/api/analytics?workspace_id=` | Aggregated stats (KPI, time series, top, usage) |
 
 ### Integrations
 | Method | Route | Mô tả |
@@ -552,8 +695,12 @@ npm start         # Production server
 |---|---|---|
 | GET | `/api/test/phase5` | Phase 5 tests (14) |
 | GET | `/api/test/phase6` | Phase 6 tests (16) |
-| GET | `/api/test/phase7` | Phase 7 tests (18) |
-| GET | `/api/test/phase75` | Phase 7.5 tests (18) |
+| GET | `/api/test/phase7` | Phase 7.1+7.2 tests (18) |
+| GET | `/api/test/phase73` | Phase 7.3 conditional branching (15) |
+| GET | `/api/test/phase75` | Phase 7.5 advanced workflows (18) |
+| GET | `/api/test/phase76` | Phase 7.6 analytics (15) |
+| GET | `/api/test/phase77` | Phase 7.7 collaboration (15) |
+| GET | `/api/test/phase78` | Phase 7.8 enterprise (20) |
 
 ---
 
@@ -595,12 +742,18 @@ Tab A ←── isSavingRef=true (skip self-update)
 | Layer | Mechanism |
 |---|---|
 | Auth | Supabase Auth (email/password), JWT middleware |
+| SSO | OIDC/SAML config per workspace (Google, Azure AD, Okta, Custom) |
+| 2FA | Enforced per workspace (enterprise toggle) |
+| RBAC | 5 roles per workflow (viewer→admin), workspace roles (owner/admin/member) |
 | RLS | Per-table policies, `is_member()` security definer |
+| IP Allowlist | CIDR matching per workspace (enterprise) |
 | Rate limit | In-memory per-IP (4 tiers by route) |
 | Input validation | Zod schemas on all POST bodies |
 | Security headers | nosniff, DENY, strict-origin-when-cross-origin, permissions |
-| Audit trail | `audit_logs` table (action, entity, IP, timestamp) |
-| Webhook | HMAC-SHA256 signature verification (Stripe) |
+| Audit trail | `audit_logs` table + CSV/JSON export |
+| Webhook signing | HMAC-SHA256 (`X-Flowly-Signature`) on outbound webhooks |
+| Stripe webhook | HMAC-SHA256 signature verification |
+| Data retention | Configurable purge (logs, runs) + archive inactive workflows |
 | Service role | Only in server-side route handlers, never exposed |
 
 ---
@@ -634,15 +787,15 @@ Tab A ←── isSavingRef=true (skip self-update)
   - [x] 6.3: Performance & SEO (loading, errors, PWA, OG)
   - [x] 6.4: Admin & Observability (dashboard, health, tracking)
   - [ ] 6.5: Deployment (Vercel, CI/CD, load test)
-- [ ] **Phase 7**: Growth & Scale
+- [x] **Phase 7**: Growth & Scale
   - [x] 7.1: Integration Framework (10 providers + marketplace UI)
   - [x] 7.2: AI Assistant (generate workflow + diagnose error)
-  - [x] 7.5: Advanced Workflows (sub-workflow, parallel, loop, condition group, delay)
-  - [ ] 7.3: Multi-language (EN)
+  - [x] 7.3: Conditional Branching (if/else on canvas, labeled edges)
   - [ ] 7.4: Mobile Enhancement (PWA + touch)
-  - [ ] 7.6: Analytics & Reporting
-  - [ ] 7.7: Team Collaboration Advanced
-  - [ ] 7.8: Enterprise Features (SSO, SCIM, API)
+  - [x] 7.5: Advanced Workflows (sub-workflow, parallel, loop, condition group, delay)
+  - [x] 7.6: Analytics & Reporting (KPI, charts, run history, CSV export)
+  - [x] 7.7: Team Collaboration (templates, node comments, activity, permissions)
+  - [x] 7.8: Enterprise (RBAC, SSO, 2FA, IP allowlist, HMAC, retention, export, alerts)
 
 ---
 

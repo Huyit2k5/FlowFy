@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { executeWorkflow } from "@/lib/workflow-engine";
+import { checkWorkflowAccess } from "@/lib/rbac";
 
 export async function POST(
   _request: NextRequest,
@@ -28,6 +29,12 @@ export async function POST(
   }
 
   const workflow = wf as { id: string; workspace_id: string; status: string };
+
+  // RBAC: cần quyền runner
+  const access = await checkWorkflowAccess(user.id, workflow.workspace_id, id, "run");
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.reason }, { status: 403 });
+  }
 
   try {
     const result = await executeWorkflow({
