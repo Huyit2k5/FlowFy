@@ -12,6 +12,21 @@ const typeMeta: Record<NodeType, { icon: string; label: string; color: string }>
   notion: { icon: "📄", label: "Notion", color: "border-zinc-300 bg-zinc-50" },
   condition: { icon: "⋔", label: "Điều kiện", color: "border-red-300 bg-red-50" },
   delay: { icon: "⏱", label: "Đợi", color: "border-cyan-300 bg-cyan-50" },
+  integration: { icon: "🔌", label: "Integration", color: "border-indigo-300 bg-indigo-50" },
+  transform: { icon: "🔄", label: "Transform", color: "border-teal-300 bg-teal-50" },
+  http: { icon: "🌐", label: "HTTP", color: "border-blue-300 bg-blue-50" },
+  google: { icon: "📧", label: "Google", color: "border-red-300 bg-red-50" },
+  telegram: { icon: "✈️", label: "Telegram", color: "border-sky-300 bg-sky-50" },
+  discord: { icon: "🎮", label: "Discord", color: "border-indigo-300 bg-indigo-50" },
+  zalo: { icon: "💚", label: "Zalo", color: "border-green-300 bg-green-50" },
+  sms: { icon: "📱", label: "SMS", color: "border-orange-300 bg-orange-50" },
+  airtable: { icon: "📊", label: "Airtable", color: "border-pink-300 bg-pink-50" },
+  trello: { icon: "📋", label: "Trello", color: "border-yellow-300 bg-yellow-50" },
+  database: { icon: "🗄️", label: "Database", color: "border-slate-300 bg-slate-50" },
+  sub_workflow: { icon: "🔁", label: "Sub-workflow", color: "border-fuchsia-300 bg-fuchsia-50" },
+  parallel: { icon: "🔀", label: "Parallel", color: "border-rose-300 bg-rose-50" },
+  loop: { icon: "🔂", label: "Loop", color: "border-lime-300 bg-lime-50" },
+  condition_group: { icon: "⚙️", label: "Condition Group", color: "border-slate-400 bg-slate-100" },
 };
 
 export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
@@ -45,21 +60,22 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
           className="!h-2.5 !w-2.5 !border-2 !border-white !bg-brand"
         />
       )}
-      {/* Source handle (ra) - không cho delay/condition (leaf) */}
-      {nodeType !== "delay" && nodeType !== "condition" && (
+      {/* Source handle (ra) - không cho delay (leaf) */}
+      {nodeType !== "delay" && nodeType !== "condition" && nodeType !== "condition_group" && (
         <Handle
           type="source"
           position={Position.Right}
           className="!h-2.5 !w-2.5 !border-2 !border-white !bg-brand"
         />
       )}
-      {/* Condition có 2 output (true/false) */}
-      {nodeType === "condition" && (
+      {/* Condition + Condition Group có 2 output (true/false) */}
+      {(nodeType === "condition" || nodeType === "condition_group") && (
         <>
           <Handle
             id="true"
             type="source"
             position={Position.Right}
+            style={{ top: "30%" }}
             className="!h-2.5 !w-2.5 !border-2 !border-white !bg-green-500"
           />
           <Handle

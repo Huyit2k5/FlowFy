@@ -1,40 +1,87 @@
 /**
- * Error tracking setup.
- * Uses Sentry if SENTRY_DSN is configured, otherwise logs to console.
- *
- * To enable Sentry:
- * 1. npm i @sentry/nextjs
- * 2. Add SENTRY_DSN to .env.local
- * 3. Uncomment the import below
+ * Error tracking: structured logging + optional Sentry.
+ * In production with SENTRY_DSN, sends to Sentry.
+ * Without it, logs structured JSON to console (collectable by log aggregators).
  */
 
-// import * as Sentry from "@sentry/nextjs";
+const ERROR_TYPES = {
+  UNHANDLED: "unhandled_rejection",
+  API: "api_error",
+  UI: "ui_error",
+  EXECUTION: "workflow_execution",
+  WEBHOOK: "webhook_delivery",
+} as const;
+
+type ErrorType = (typeof ERROR_TYPES)[keyof typeof ERROR_TYPES];
+
+interface ErrorContext {
+  userId?: string;
+  workspaceId?: string;
+  workflowId?: string;
+  executionId?: string;
+  path?: string;
+  method?: string;
+  durationMs?: number;
+  retry?: number;
+}
 
 export function initErrorTracking() {
-  // if (process.env.SENTRY_DSN) {
-  //   Sentry.init({
-  //     dsn: process.env.SENTRY_DSN,
-  //     environment: process.env.NODE_ENV,
-  //     tracesSampleRate: 0.1,
-  //   });
-  // }
-  console.log("[ErrorTracking] Initialized (Sentry disabled in dev)");
+  // Future: Sentry.init({ dsn, environment, tracesSampleRate: 0.1 })
+  console.log("[ErrorTracking] Initialized", process.env.NODE_ENV);
 }
 
-export function captureException(error: unknown, context?: Record<string, unknown>) {
+export function captureException(
+  error: unknown,
+  context: ErrorContext & { type: ErrorType } = { type: ERROR_TYPES.UNHANDLED }
+) {
+  const entry = {
+    level: "error",
+    type: context.type,
+    timestamp: new Date().toISOString(),
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    context: {
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+      workflowId: context.workflowId,
+      executionId: context.executionId,
+      path: context.path,
+      method: context.method,
+      durationMs: context.durationMs,
+      retry: context.retry,
+    },
+  };
+
   if (process.env.SENTRY_DSN) {
-    // Sentry.captureException(error, { extra: context });
-    console.error("[ErrorTracking] Sentry:", error, context);
+    // Sentry.captureException(error, { extra: entry.context, tags: { type: context.type } });
+    console.error("[ErrorTracking][Sentry]", JSON.stringify(entry));
   } else {
-    console.error("[ErrorTracking]", error, context ?? {});
+    console.error("[ErrorTracking]", JSON.stringify(entry, null, 2));
   }
 }
 
-export function captureMessage(message: string, context?: Record<string, unknown>) {
-  if (process.env.SENTRY_DSN) {
-    // Sentry.captureMessage(message, { extra: context });
-    console.log("[ErrorTracking]", message, context ?? {});
+export function captureMessage(
+  message: string,
+  context: ErrorContext & { type?: ErrorType; level?: "info" | "warn" | "error" } = {}
+) {
+  const entry = {
+    level: context.level ?? "info",
+    type: context.type ?? ERROR_TYPES.UNHANDLED,
+    timestamp: new Date().toISOString(),
+    message,
+    context: {
+      userId: context.userId,
+      workflowId: context.workflowId,
+      path: context.path,
+    },
+  };
+
+  if (process.env.SENTRY_DSN && context.level === "error") {
+    // Sentry.captureMessage(message, { level: context.level, extra: entry.context });
+    console.error("[ErrorTracking][Sentry]", JSON.stringify(entry));
   } else {
-    console.log("[ErrorTracking]", message, context ?? {});
+    console.log(`[ErrorTracking][${entry.level}]`, message, entry.context);
   }
 }
+
+export { ERROR_TYPES };

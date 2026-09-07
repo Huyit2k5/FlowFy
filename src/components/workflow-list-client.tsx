@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import SampleWorkflows from "@/components/sample-workflows";
 
 interface Workflow {
   id: string;
@@ -91,13 +92,7 @@ export default function WorkflowListClient({ workspaceId, workflows }: Props) {
       </button>
 
       {workflows.length === 0 ? (
-        <div className="mt-8 rounded-xl border-2 border-dashed border-zinc-200 bg-white p-16 text-center">
-          <p className="text-4xl" aria-hidden>⚡</p>
-          <h2 className="mt-4 text-lg font-semibold">Chưa có workflow nào</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">
-            Tạo workflow đầu tiên để bắt đầu tự động hóa quy trình làm việc.
-          </p>
-        </div>
+        <SampleWorkflows workspaceId={workspaceId} />
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {workflows.map((w) => (

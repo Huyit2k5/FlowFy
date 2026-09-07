@@ -36,7 +36,24 @@ export default function RunHistory({ workflowId, initialRuns }: Props) {
   const [selectedRun, setSelectedRun] = useState<Run | null>(null);
   const [logs, setLogs] = useState<Log[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const logsChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  const filteredRuns = statusFilter === "all" ? runs : runs.filter((r) => r.status === statusFilter);
+
+  function exportCSV() {
+    const header = "id,status,trigger,started_at,finished_at,error\n";
+    const rows = filteredRuns.map((r) =>
+      [r.id, r.status, r.trigger, r.started_at, r.finished_at ?? "", (r.error ?? "").replace(/[\n,]/g, " ")].join(",")
+    ).join("\n");
+    const blob = new Blob([header + rows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `runs-${workflowId.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   // Realtime: subscribe khi chọn run
   useEffect(() => {
@@ -143,8 +160,21 @@ export default function RunHistory({ workflowId, initialRuns }: Props) {
   return (
     <div className="max-h-72 overflow-hidden">
       <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-2">
-        <span className="text-sm font-semibold">Lịch sử chạy</span>
+        <span className="text-sm font-semibold">Lịch sử chạy ({filteredRuns.length}/{runs.length})</span>
         <div className="flex items-center gap-3">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded border border-zinc-200 px-2 py-0.5 text-xs"
+          >
+            <option value="all">Tất cả</option>
+            <option value="success">Thành công</option>
+            <option value="failed">Lỗi</option>
+            <option value="running">Đang chạy</option>
+          </select>
+          <button type="button" onClick={exportCSV} className="text-xs text-brand hover:underline">
+            ⬇ CSV
+          </button>
           <button
             type="button"
             onClick={refreshRuns}
@@ -163,15 +193,15 @@ export default function RunHistory({ workflowId, initialRuns }: Props) {
         </div>
       </div>
 
-      {runs.length === 0 ? (
+      {filteredRuns.length === 0 ? (
         <p className="px-6 py-6 text-center text-sm text-zinc-400">
-          Chưa có lần chạy nào. Bấm &quot;Chạy&quot; để thử workflow.
+          {runs.length === 0 ? 'Chưa có lần chạy nào. Bấm "Chạy" để thử workflow.' : "Không có run nào khớp bộ lọc."}
         </p>
       ) : (
         <div className="flex h-64 overflow-hidden">
           {/* Run list */}
           <div className="w-64 overflow-y-auto border-r border-zinc-100">
-            {runs.map((r) => (
+            {filteredRuns.map((r) => (
               <button
                 key={r.id}
                 type="button"

@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getWorkspaces } from "@/lib/workspaces";
+import { check2faStatus } from "@/lib/two-factor";
 import AppShell from "@/components/app-shell";
+import { TwoFactorGate } from "@/components/two-factor-gate";
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
@@ -15,9 +17,16 @@ export default async function WorkspaceLayout({ children, params }: WorkspaceLay
 
   const current = workspaces.find((w) => w.id === id) ?? workspaces[0];
 
+  // Enterprise: 2FA enforcement
+  const twoFactor = await check2faStatus(id);
+
   return (
     <AppShell workspaces={workspaces} current={current}>
-      {children}
+      {twoFactor.enforced && !twoFactor.allowed ? (
+        <TwoFactorGate />
+      ) : (
+        children
+      )}
     </AppShell>
   );
 }
