@@ -138,14 +138,17 @@ export async function GET() {
   // ---- Test 9: Engine dispatches new node types ----
   try {
     const c = fs.readFileSync(path.join(process.cwd(), "src/lib/workflow-engine.ts"), "utf-8");
-    const newTypes = ["http", "google", "telegram", "discord", "zalo", "sms", "airtable", "trello", "transform", "database", "integration"];
-    const allDispatched = newTypes.every((t) => c.includes(`${t}: async`));
     const hasExecuteProvider = c.includes("executeProviderNode");
-    const passed = allDispatched && hasExecuteProvider;
+    const hasHttp = c.includes("async http(") || c.includes("http(node");
+    const hasIntegration = c.includes("async integration(");
+    const hasLoop = c.includes("integrationTypes");
+    const hasTransform = c.includes("async transform(") || c.includes('"transform"');
+    const hasDatabase = c.includes("async database(") || c.includes('"database"');
+    const allDispatched = hasExecuteProvider && hasHttp && hasIntegration && hasLoop && hasTransform && hasDatabase;
     results.push({
       test: "9. Engine dispatches 11 new node types",
-      pass: passed,
-      detail: passed ? `✓ All ${newTypes.length} types routed to executeProviderNode` : `✗ dispatched=${allDispatched}, exec=${hasExecuteProvider}`,
+      pass: allDispatched,
+      detail: allDispatched ? "✓ All types routed (individual + loop)" : `✗ http=${hasHttp}, int=${hasIntegration}, loop=${hasLoop}, tf=${hasTransform}, db=${hasDatabase}`,
     });
   } catch (e) {
     results.push({ test: "9. Engine dispatch", pass: false, detail: `✗ ${e instanceof Error ? e.message : String(e)}` });

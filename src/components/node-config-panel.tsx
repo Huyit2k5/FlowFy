@@ -129,6 +129,10 @@ const emptyDefaults: Record<string, Record<string, unknown>> = {
   email: { to: "", subject: "", body: "", html: false },
   notion: { notionToken: "", databaseId: "", pageId: "", action: "create_page", content: "" },
   condition: { expression: "true" },
+  condition_group: { operator: "AND", conditions: "" },
+  sub_workflow: { workflowId: "", inputMapping: "", outputKey: "subResult" },
+  parallel: { maxConcurrent: 5, failFast: false },
+  loop: { sourceNode: "", arrayField: "items", maxIterations: 50 },
   delay: { seconds: 5 },
 };
 
@@ -385,6 +389,39 @@ export default function NodeConfigPanel({ node, onSave, onDelete }: Props) {
           />
           <p className="mt-1 text-xs text-zinc-400">
             Dùng <code>{"{{nodeId.field}}"}</code> để tham chiếu output của node khác.
+          </p>
+          <p className="mt-2 flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-green-500" /> <strong>True</strong> (port trên) → chạy tiếp</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-red-500" /> <strong>False</strong> (port dưới) → nhánh khác</span>
+          </p>
+        </div>
+      )}
+
+      {node.type === "condition_group" && (
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">Operator</label>
+          <select
+            value={(data.operator as string) ?? "AND"}
+            onChange={(e) => set("operator", e.target.value)}
+            className={inputCls}
+          >
+            <option value="AND">AND (tất cả phải đúng)</option>
+            <option value="OR">OR (một trong số đúng)</option>
+          </select>
+          <label className="mb-1.5 mt-3 block text-sm font-medium">Điều kiện</label>
+          <div className="flex flex-col gap-2">
+            <textarea
+              value={(data.conditions as string) ?? ""}
+              onChange={(e) => set("conditions", e.target.value)}
+              placeholder={"Mỗi dòng 1 điều kiện:\n{{status}} === 'ok'\n{{count}} > 0"}
+              rows={3}
+              className={inputCls + " font-mono text-xs"}
+            />
+            <p className="text-xs text-zinc-400">Mỗi dòng 1 expression. Engine tách theo newline.</p>
+          </div>
+          <p className="mt-2 flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-green-500" /> <strong>True</strong> (port trên)</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-red-500" /> <strong>False</strong> (port dưới)</span>
           </p>
         </div>
       )}

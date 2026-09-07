@@ -31,6 +31,8 @@ import { createClient } from "@/lib/supabase/browser";
 interface Props {
   workspaceId: string;
   workflow: WorkflowWithNodes;
+  initialNodes?: Node[];
+  initialEdges?: Edge[];
 }
 
 const nodeTypes = { flow: FlowNode };
@@ -66,13 +68,13 @@ interface PresenceUser {
   last_seen: string;
 }
 
-export default function WorkflowCanvas({ workflow }: Props) {
+export default function WorkflowCanvas({ workflow, initialNodes, initialEdges }: Props) {
   const router = useRouter();
   const { screenToFlowPosition } = useReactFlow();
   const supabase = createClient();
 
-  const [nodes, setNodes] = useState<Node[]>(workflow.nodes.map(toFlowNode));
-  const [edges, setEdges] = useState<Edge[]>(workflow.edges);
+  const [nodes, setNodes] = useState<Node[]>(initialNodes ?? workflow.nodes.map(toFlowNode));
+  const [edges, setEdges] = useState<Edge[]>(initialEdges ?? workflow.edges);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
@@ -181,7 +183,8 @@ export default function WorkflowCanvas({ workflow }: Props) {
 
   const onConnect = useCallback(
     (conn: Connection) => {
-      setEdges((eds) => addEdge({ ...conn, animated: true }, eds));
+      const label = (conn.sourceHandle === "true" || conn.sourceHandle === "false") ? conn.sourceHandle : undefined;
+      setEdges((eds) => addEdge({ ...conn, animated: true, label: label || undefined }, eds));
       setDirty(true);
     },
     []
@@ -321,11 +324,19 @@ export default function WorkflowCanvas({ workflow }: Props) {
   const palette: { type: NodeType; icon: string; label: string }[] = [
     { type: "trigger", icon: "▶", label: "Trigger" },
     { type: "webhook", icon: "🔗", label: "Webhook" },
+    { type: "http", icon: "🌐", label: "HTTP" },
     { type: "slack", icon: "💬", label: "Slack" },
     { type: "email", icon: "✉", label: "Email" },
     { type: "notion", icon: "📄", label: "Notion" },
     { type: "condition", icon: "⋔", label: "Điều kiện" },
+    { type: "condition_group", icon: "⚙️", label: "Condition Group" },
     { type: "delay", icon: "⏱", label: "Đợi" },
+    { type: "transform", icon: "🔄", label: "Transform" },
+    { type: "database", icon: "🗄️", label: "Database" },
+    { type: "integration", icon: "🔌", label: "Integration" },
+    { type: "sub_workflow", icon: "🔁", label: "Sub-workflow" },
+    { type: "parallel", icon: "🔀", label: "Parallel" },
+    { type: "loop", icon: "🔂", label: "Loop" },
   ];
 
   return (

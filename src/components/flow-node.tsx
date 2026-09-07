@@ -23,6 +23,10 @@ const typeMeta: Record<NodeType, { icon: string; label: string; color: string }>
   airtable: { icon: "📊", label: "Airtable", color: "border-pink-300 bg-pink-50" },
   trello: { icon: "📋", label: "Trello", color: "border-yellow-300 bg-yellow-50" },
   database: { icon: "🗄️", label: "Database", color: "border-slate-300 bg-slate-50" },
+  sub_workflow: { icon: "🔁", label: "Sub-workflow", color: "border-fuchsia-300 bg-fuchsia-50" },
+  parallel: { icon: "🔀", label: "Parallel", color: "border-rose-300 bg-rose-50" },
+  loop: { icon: "🔂", label: "Loop", color: "border-lime-300 bg-lime-50" },
+  condition_group: { icon: "⚙️", label: "Condition Group", color: "border-slate-400 bg-slate-100" },
 };
 
 export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
@@ -56,21 +60,22 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
           className="!h-2.5 !w-2.5 !border-2 !border-white !bg-brand"
         />
       )}
-      {/* Source handle (ra) - không cho delay/condition (leaf) */}
-      {nodeType !== "delay" && nodeType !== "condition" && (
+      {/* Source handle (ra) - không cho delay (leaf) */}
+      {nodeType !== "delay" && nodeType !== "condition" && nodeType !== "condition_group" && (
         <Handle
           type="source"
           position={Position.Right}
           className="!h-2.5 !w-2.5 !border-2 !border-white !bg-brand"
         />
       )}
-      {/* Condition có 2 output (true/false) */}
-      {nodeType === "condition" && (
+      {/* Condition + Condition Group có 2 output (true/false) */}
+      {(nodeType === "condition" || nodeType === "condition_group") && (
         <>
           <Handle
             id="true"
             type="source"
             position={Position.Right}
+            style={{ top: "30%" }}
             className="!h-2.5 !w-2.5 !border-2 !border-white !bg-green-500"
           />
           <Handle

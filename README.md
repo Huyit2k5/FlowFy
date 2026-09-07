@@ -10,7 +10,7 @@ Giao diện tiếng Việt, giá VND, hỗ trợ 24/7.
 
 Flowly là SaaS giúp đội ngũ tự động hóa quy trình lặp lại: nhận webhook → xử lý → gửi Slack/Email/Notion/Telegram/Zalo/Google/Airtable/Trello, chạy định kỳ theo cron, cộng tác realtime trên canvas, AI sinh workflow từ mô tả, thanh toán subscription qua Stripe.
 
-**Hoàn thành: Phase 1–7.2** (Auth, Workflow Engine, Webhook/Schedule, Integrations, Real-time Collab, Billing/Security/Performance/Admin, Integration Framework + AI Assistant).
+**Hoàn thành: Phase 1–7.5** (Auth, Workflow Engine, Webhook/Schedule, Integrations, Real-time Collab, Billing/Security/Performance/Admin, Integration Framework + AI Assistant + Advanced Workflows).
 
 ---
 
@@ -363,6 +363,29 @@ interface IntegrationProvider {
 
 **Tests**: 18/18 passed
 
+#### 7.5: Advanced Workflows (5 node types)
+
+| Node | Icon | Chi tiết |
+|------|------|----------|
+| **Sub-workflow** | 🔁 | Gọi workflow khác như một node. Input mapping (template → sub-input), output key, trigger prefix `sub_workflow:parentId:nodeId` |
+| **Parallel** | 🔀 | Chạy nhiều nhánh đồng thời. `maxConcurrent` (1-20), `failFast` (stop if any branch fails) |
+| **Loop** | 🔂 | For-each over array. `sourceNode` + `arrayField`, `maxIterations` (1-100), provides `loopIndex` + `loopItem` in context |
+| **Condition Group** | ⚙️ | Multi-condition AND/OR. Array of expressions, `operator: "AND" \| "OR"` |
+| **Delay** | ⏱ | Pause execution. `seconds` (1-86400), capped at 60s in engine for safety |
+
+**Engine changes**:
+- `NODE_TYPES` expanded to 22 types
+- 5 new runners in `nodeRunners` record
+- Sub-workflow recursively calls `executeWorkflow()`
+- Loop sets `ctx.loopIndex` / `ctx.loopItem` during iteration
+- Condition group: `results.every()` for AND, `results.some()` for OR
+
+**Canvas**: Palette expanded to 15 node types (trigger, webhook, http, slack, email, notion, condition, condition_group, delay, transform, database, integration, sub_workflow, parallel, loop). Flow node styles for all 4 new types.
+
+**Zod schemas**: `subWorkflowConfigSchema`, `parallelConfigSchema`, `loopConfigSchema`, `conditionGroupConfigSchema`, `delayConfigSchema`
+
+**Tests**: 18/18 passed
+
 ---
 
 ## Plan Limits
@@ -459,6 +482,7 @@ npm start         # Production server
 | `GET /api/test/phase5` | Phase 5: collab, presence, plan limits, UI (14 tests) |
 | `GET /api/test/phase6` | Phase 6: billing, security, perf, admin (16 tests) |
 | `GET /api/test/phase7` | Phase 7: integrations, AI assistant (18 tests) |
+| `GET /api/test/phase75` | Phase 7.5: advanced workflows (18 tests) |
 | `POST /api/test/run-workflow` | Tạo + chạy workflow test |
 | `GET /api/health` | Health check (DB + Redis) |
 
@@ -529,6 +553,7 @@ npm start         # Production server
 | GET | `/api/test/phase5` | Phase 5 tests (14) |
 | GET | `/api/test/phase6` | Phase 6 tests (16) |
 | GET | `/api/test/phase7` | Phase 7 tests (18) |
+| GET | `/api/test/phase75` | Phase 7.5 tests (18) |
 
 ---
 
@@ -612,9 +637,9 @@ Tab A ←── isSavingRef=true (skip self-update)
 - [ ] **Phase 7**: Growth & Scale
   - [x] 7.1: Integration Framework (10 providers + marketplace UI)
   - [x] 7.2: AI Assistant (generate workflow + diagnose error)
+  - [x] 7.5: Advanced Workflows (sub-workflow, parallel, loop, condition group, delay)
   - [ ] 7.3: Multi-language (EN)
   - [ ] 7.4: Mobile Enhancement (PWA + touch)
-  - [ ] 7.5: Advanced Workflows (sub-workflows, parallel, loop)
   - [ ] 7.6: Analytics & Reporting
   - [ ] 7.7: Team Collaboration Advanced
   - [ ] 7.8: Enterprise Features (SSO, SCIM, API)

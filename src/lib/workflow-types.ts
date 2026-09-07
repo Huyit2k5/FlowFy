@@ -23,6 +23,10 @@ export const NODE_TYPES = [
   "airtable",
   "trello",
   "database",
+  "sub_workflow",
+  "parallel",
+  "loop",
+  "condition_group",
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
@@ -75,6 +79,30 @@ export const delayConfigSchema = z.object({
   seconds: z.number().int().min(1).max(86400),
 });
 
+export const subWorkflowConfigSchema = z.object({
+  workflowId: z.string().uuid(),
+  inputMapping: z.record(z.string(), z.string()).optional(),
+  outputKey: z.string().optional(),
+});
+
+export const parallelConfigSchema = z.object({
+  maxConcurrent: z.number().int().min(1).max(20).default(5),
+  failFast: z.boolean().default(false),
+});
+
+export const loopConfigSchema = z.object({
+  sourceNode: z.string(),
+  arrayField: z.string().default("items"),
+  maxIterations: z.number().int().min(1).max(100).default(50),
+});
+
+export const conditionGroupConfigSchema = z.object({
+  operator: z.enum(["AND", "OR"]),
+  conditions: z.array(z.object({
+    expression: z.string(),
+  })),
+});
+
 export const nodeConfigSchema = z.discriminatedUnion("nodeType", [
   z.object({ nodeType: z.literal("trigger"), ...triggerConfigSchema.shape }),
   z.object({ nodeType: z.literal("webhook"), ...webhookConfigSchema.shape }),
@@ -101,6 +129,7 @@ export interface WorkflowEdge {
   id: string;
   source: string;
   target: string;
+  label?: "true" | "false";
 }
 
 // ============================================================
