@@ -321,23 +321,36 @@ export default function WorkflowCanvas({ workflow, initialNodes, initialEdges }:
 
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
 
-  const palette: { type: NodeType; icon: string; label: string }[] = [
-    { type: "trigger", icon: "▶", label: "Trigger" },
-    { type: "webhook", icon: "🔗", label: "Webhook" },
-    { type: "http", icon: "🌐", label: "HTTP" },
-    { type: "slack", icon: "💬", label: "Slack" },
-    { type: "email", icon: "✉", label: "Email" },
-    { type: "notion", icon: "📄", label: "Notion" },
-    { type: "condition", icon: "⋔", label: "Điều kiện" },
-    { type: "condition_group", icon: "⚙️", label: "Condition Group" },
-    { type: "delay", icon: "⏱", label: "Đợi" },
-    { type: "transform", icon: "🔄", label: "Transform" },
-    { type: "database", icon: "🗄️", label: "Database" },
-    { type: "integration", icon: "🔌", label: "Integration" },
-    { type: "sub_workflow", icon: "🔁", label: "Sub-workflow" },
-    { type: "parallel", icon: "🔀", label: "Parallel" },
-    { type: "loop", icon: "🔂", label: "Loop" },
+  const [paletteLevel, setPaletteLevel] = useState<"basic" | "advanced" | "all">("basic");
+
+  const allPalette: { type: NodeType; icon: string; label: string; level: "basic" | "advanced" }[] = [
+    { type: "trigger", icon: "▶", label: "Trigger", level: "basic" },
+    { type: "webhook", icon: "🔗", label: "Webhook", level: "basic" },
+    { type: "slack", icon: "💬", label: "Slack", level: "basic" },
+    { type: "email", icon: "✉", label: "Email", level: "basic" },
+    { type: "zalo", icon: "💚", label: "Zalo", level: "basic" },
+    { type: "condition", icon: "⋔", label: "Điều kiện", level: "basic" },
+    { type: "delay", icon: "⏱", label: "Đợi", level: "basic" },
+    { type: "http", icon: "🌐", label: "HTTP", level: "advanced" },
+    { type: "notion", icon: "📄", label: "Notion", level: "advanced" },
+    { type: "telegram", icon: "✈️", label: "Telegram", level: "advanced" },
+    { type: "discord", icon: "🎮", label: "Discord", level: "advanced" },
+    { type: "sms", icon: "📱", label: "SMS", level: "advanced" },
+    { type: "trello", icon: "📋", label: "Trello", level: "advanced" },
+    { type: "airtable", icon: "📊", label: "Airtable", level: "advanced" },
+    { type: "google", icon: "📧", label: "Google", level: "advanced" },
+    { type: "transform", icon: "🔄", label: "Transform", level: "advanced" },
+    { type: "database", icon: "🗄️", label: "Database", level: "advanced" },
+    { type: "condition_group", icon: "⚙️", label: "Multi-condition", level: "advanced" },
+    { type: "loop", icon: "🔂", label: "Loop", level: "advanced" },
+    { type: "parallel", icon: "🔀", label: "Parallel", level: "advanced" },
+    { type: "integration", icon: "🔌", label: "Integration", level: "advanced" },
+    { type: "sub_workflow", icon: "🔁", label: "Sub-workflow", level: "advanced" },
   ];
+
+  const palette = allPalette.filter((p) =>
+    paletteLevel === "all" ? true : paletteLevel === "basic" ? p.level === "basic" : true
+  );
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col">
@@ -404,9 +417,19 @@ export default function WorkflowCanvas({ workflow, initialNodes, initialEdges }:
       <div className="flex flex-1 overflow-hidden">
         {/* Palette */}
         <div className="w-44 shrink-0 overflow-y-auto border-r border-zinc-200 bg-white p-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-            Thêm node
-          </p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+              Thêm node
+            </p>
+            <select
+              value={paletteLevel}
+              onChange={(e) => setPaletteLevel(e.target.value as "basic" | "advanced" | "all")}
+              className="rounded border border-zinc-200 px-1 py-0.5 text-[10px] text-zinc-500"
+            >
+              <option value="basic">Căn bản</option>
+              <option value="all">Tất cả</option>
+            </select>
+          </div>
           <div className="flex flex-col gap-1.5">
             {palette.map((p) => (
               <button

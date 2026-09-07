@@ -1,11 +1,50 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { scheduleWorkflowJob, getQueue } from "@/lib/workflow-queue";
 
 /**
  * PUT: bật/tắt schedule cho workflow.
  * Body: { cron: "0 9 * * 1-5", enabled: true/false }
+ * Uses Vercel Cron (no BullMQ/Redis needed).
  */
+
+function nextOccurrence(cron: string, from: Date): Date {
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) return new Date(from.getTime() + 3600_000);
+  const [min, hour, , , dow] = parts;
+  const result = new Date(from);
+  result.setSeconds(0, 0);
+
+  if (min === "*" && hour === "*") {
+    result.setMinutes(result.getMinutes() + 1);
+    return result;
+  }
+  if (hour === "*") {
+    result.setMinutes(parseInt(min, 10) || 0);
+    result.setHours(result.getHours() + 1);
+    return result;
+  }
+  result.setMinutes(parseInt(min, 10) || 0);
+  result.setHours(parseInt(hour, 10) || 0);
+  if (dow !== "*") {
+    const days: number[] = [];
+    for (const p of dow.split(",")) {
+      if (p.includes("-")) {
+        const [a, b] = p.split("-").map(Number);
+        for (let d = a; d <= b; d++) days.push(d);
+      } else {
+        days.push(parseInt(p, 10));
+      }
+    }
+    let add = 0;
+    while (!days.includes(result.getDay()) && add < 8) {
+      add++;
+      result.setDate(result.getDate() + 1);
+    }
+  }
+  if (result <= from) result.setDate(result.getDate() + 1);
+  return result;
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -38,20 +77,12 @@ export async function PUT(
     trigger_type: string;
   };
 
-  // Nếu tắt schedule
+  // Tắt schedule
   if (enabled === false) {
     await supabase
       .from("workflows")
-      .update({ schedule: null, schedule_enabled: false })
+      .update({ schedule: null, schedule_enabled: false, next_run_at: null })
       .eq("id", id);
-
-    // Xóa job scheduler
-    try {
-      const queue = getQueue();
-      await queue.removeJobScheduler(`wf-${id}`);
-    } catch {
-      // Redis chưa sẵn sàng — ignore
-    }
 
     return NextResponse.json({ ok: true, message: "Đã tắt lịch chạy" });
   }
@@ -61,24 +92,21 @@ export async function PUT(
     return NextResponse.json({ error: "Cần cron expression" }, { status: 400 });
   }
 
+  const nextRun = nextOccurrence(cron, new Date());
+
   await supabase
     .from("workflows")
-    .update({ schedule: cron, schedule_enabled: true, trigger_type: "schedule" })
+    .update({
+      schedule: cron,
+      schedule_enabled: true,
+      trigger_type: "schedule",
+      next_run_at: nextRun.toISOString(),
+    })
     .eq("id", id);
 
-  try {
-    await scheduleWorkflowJob({
-      workflowId: id,
-      workspaceId: workflow.workspace_id,
-      trigger: "schedule",
-      cron,
-    });
-  } catch (e) {
-    return NextResponse.json(
-      { error: `Redis chưa sẵn sàng: ${e instanceof Error ? e.message : "Lỗi"}` },
-      { status: 503 }
-    );
-  }
-
-  return NextResponse.json({ ok: true, message: "Đã bật lịch chạy" });
+  return NextResponse.json({
+    ok: true,
+    message: "Đã bật lịch chạy",
+    next_run: nextRun.toISOString(),
+  });
 }

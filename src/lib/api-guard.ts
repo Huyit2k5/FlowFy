@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { rateLimit } from "@/lib/rate-limiter";
+import { apiLimiter } from "@/lib/rate-limiter";
 import { z } from "zod";
 
 /**
@@ -14,20 +14,19 @@ export function withSecurity(
   handler: (request: NextRequest, context: { params: Promise<Record<string, string>> }) => Promise<NextResponse>
 ) {
   return async (request: NextRequest, context: { params: Promise<Record<string, string>> }) => {
-    // Rate limit
-    const rl = rateLimit(request);
-    if (!rl.ok) {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const rl = apiLimiter.check(ip);
+    if (!rl.allowed) {
       const res = NextResponse.json(
-        { error: "Quá nhiều yêu cầu. Thử lại sau." },
+        { success: false, error: "Quá nhiều yêu cầu. Thử lại sau.", code: "RATE_LIMIT" },
         { status: 429 }
       );
-      res.headers.set("Retry-After", String(rl.retryAfter ?? 60));
+      res.headers.set("Retry-After", String(Math.ceil(rl.resetMs / 1000)));
       return res;
     }
 
     const response = await handler(request, context);
 
-    // Add security headers
     response.headers.set("X-Content-Type-Options", "nosniff");
     response.headers.set("X-Frame-Options", "DENY");
     response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");

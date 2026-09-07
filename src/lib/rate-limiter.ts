@@ -1,60 +1,78 @@
-import { type NextRequest } from "next/server";
-
 /**
- * Simple in-memory rate limiter (per IP per route).
- * For production, replace with Upstash Ratelimit (Redis-based).
+ * In-memory rate limiter. Works in single-instance deployment.
+ * For multi-instance: swap to Upstash/Redis (same interface).
  *
- * Limits:
- * - Auth routes (/api/auth/*): 10 req/min
- * - API routes (/api/*): 60 req/min
- * - Webhook (/api/webhooks/*): 30 req/min (public)
+ * Usage:
+ *   const limiter = rateLimiter({ windowMs: 60000, max: 100 });
+ *   const result = limiter.check(key);
+ *   if (!result.allowed) return apiError("Rate limit exceeded", { status: 429 });
  */
+
+interface RateLimitOptions {
+  windowMs: number;
+  max: number;
+}
+
+interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  resetMs: number;
+}
 
 interface Bucket {
   count: number;
   resetAt: number;
 }
 
-const buckets = new Map<string, Bucket>();
-const WINDOW_MS = 60_000; // 1 minute
+export class RateLimiter {
+  private buckets = new Map<string, Bucket>();
+  private windowMs: number;
+  private max: number;
 
-// Cleanup old buckets every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, bucket] of buckets) {
-    if (bucket.resetAt < now) buckets.delete(key);
+  constructor(opts: RateLimitOptions) {
+    this.windowMs = opts.windowMs;
+    this.max = opts.max;
+    this.prune();
   }
-}, 300_000).unref();
 
-function getRateLimit(pathname: string): number {
-  if (pathname.startsWith("/api/auth/")) return 10;
-  if (pathname.startsWith("/api/webhooks/")) return 30;
-  if (pathname.startsWith("/api/billing/")) return 5;
-  return 60;
+  check(key: string): RateLimitResult {
+    const now = Date.now();
+    const bucket = this.buckets.get(key);
+
+    if (!bucket || now >= bucket.resetAt) {
+      this.buckets.set(key, { count: 1, resetAt: now + this.windowMs });
+      return { allowed: true, remaining: this.max - 1, resetMs: this.windowMs };
+    }
+
+    if (bucket.count >= this.max) {
+      return { allowed: false, remaining: 0, resetMs: bucket.resetAt - now };
+    }
+
+    bucket.count++;
+    return { allowed: true, remaining: this.max - bucket.count, resetMs: bucket.resetAt - now };
+  }
+
+  private prune() {
+    const now = Date.now();
+    for (const [key, b] of this.buckets) {
+      if (now >= b.resetAt) this.buckets.delete(key);
+    }
+  }
 }
 
-export function rateLimit(request: NextRequest): { ok: boolean; retryAfter?: number } {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "unknown";
+// --- Pre-configured limiters ---
 
-  const key = `${ip}:${request.nextUrl.pathname}`;
-  const limit = getRateLimit(request.nextUrl.pathname);
-  const now = Date.now();
+// General API: 100 req/min per user
+export const apiLimiter = new RateLimiter({ windowMs: 60_000, max: 100 });
 
-  let bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt < now) {
-    bucket = { count: 0, resetAt: now + WINDOW_MS };
-    buckets.set(key, bucket);
-  }
+// Webhook triggers: 10 req/min per workflow
+export const webhookLimiter = new RateLimiter({ windowMs: 60_000, max: 10 });
 
-  bucket.count++;
+// AI agent: 20 req/min per user
+export const aiLimiter = new RateLimiter({ windowMs: 60_000, max: 20 });
 
-  if (bucket.count > limit) {
-    const retryAfter = Math.ceil((bucket.resetAt - now) / 1000);
-    return { ok: false, retryAfter };
-  }
+// Auth endpoints: 5 req/min per IP
+export const authLimiter = new RateLimiter({ windowMs: 60_000, max: 5 });
 
-  return { ok: true };
-}
+// Workflow execution: 30 req/min per user
+export const runLimiter = new RateLimiter({ windowMs: 60_000, max: 30 });

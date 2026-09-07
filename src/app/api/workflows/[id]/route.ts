@@ -7,6 +7,7 @@ import {
   getWorkflow,
 } from "@/lib/workflow-db";
 import { checkWorkflowAccess } from "@/lib/rbac";
+import { checkIpAccess } from "@/lib/ip-enforce";
 import type { WorkflowNode, WorkflowEdge } from "@/lib/workflow-types";
 
 export async function GET(
@@ -39,6 +40,12 @@ export async function PUT(
   const wf = await getWorkflow(id);
   if (!wf) {
     return NextResponse.json({ error: "Không tìm thấy workflow" }, { status: 404 });
+  }
+
+  // IP Allowlist check
+  const ipCheck = await checkIpAccess(request, supabase, wf.workspace_id);
+  if (!ipCheck.allowed) {
+    return NextResponse.json({ error: ipCheck.reason }, { status: 403 });
   }
 
   const access = await checkWorkflowAccess(user.id, wf.workspace_id, id, "edit");
@@ -77,7 +84,7 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient();
@@ -93,6 +100,12 @@ export async function DELETE(
   const wf = await getWorkflow(id);
   if (!wf) {
     return NextResponse.json({ error: "Không tìm thấy workflow" }, { status: 404 });
+  }
+
+  // IP Allowlist check
+  const ipCheck = await checkIpAccess(request, supabase, wf.workspace_id);
+  if (!ipCheck.allowed) {
+    return NextResponse.json({ error: ipCheck.reason }, { status: 403 });
   }
 
   const access = await checkWorkflowAccess(user.id, wf.workspace_id, id, "admin");

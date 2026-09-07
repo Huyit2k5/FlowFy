@@ -100,6 +100,30 @@ export default function LoginForm() {
           Đăng ký miễn phí
         </Link>
       </p>
+
+      <div className="mt-8 border-t border-zinc-100 pt-6">
+        <p className="mb-3 text-center text-xs text-zinc-400">Hoặc đăng nhập bằng</p>
+        <div className="flex justify-center gap-3">
+          <a
+            href={`/api/sso?provider=google&redirect=${encodeURIComponent(next)}`}
+            className="flex items-center gap-2 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+          >
+            <span className="text-base">G</span> Google
+          </a>
+          <a
+            href={`/api/sso?provider=microsoft&redirect=${encodeURIComponent(next)}`}
+            className="flex items-center gap-2 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+          >
+            <span className="text-base text-[#0078D4]">M</span> Microsoft
+          </a>
+          <a
+            href={`/api/sso?provider=okta&redirect=${encodeURIComponent(next)}`}
+            className="flex items-center gap-2 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+          >
+            <span className="text-base text-[#007DC1]">O</span> Okta
+          </a>
+        </div>
+      </div>
     </div>
   );
 }

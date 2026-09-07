@@ -2,9 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { executeWorkflow } from "@/lib/workflow-engine";
 import { checkWorkflowAccess } from "@/lib/rbac";
+import { checkIpAccess } from "@/lib/ip-enforce";
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient();
@@ -29,6 +30,12 @@ export async function POST(
   }
 
   const workflow = wf as { id: string; workspace_id: string; status: string };
+
+  // IP Allowlist check
+  const ipCheck = await checkIpAccess(request, supabase, workflow.workspace_id);
+  if (!ipCheck.allowed) {
+    return NextResponse.json({ error: ipCheck.reason }, { status: 403 });
+  }
 
   // RBAC: cần quyền runner
   const access = await checkWorkflowAccess(user.id, workflow.workspace_id, id, "run");

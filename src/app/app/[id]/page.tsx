@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspaces";
+import DashboardTour from "@/components/dashboard-tour";
 
 export default async function DashboardPage({
   params,
@@ -48,6 +49,8 @@ export default async function DashboardPage({
 
   return (
     <div>
+      <DashboardTour />
+
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Tổng quan</h1>
@@ -56,6 +59,7 @@ export default async function DashboardPage({
           </p>
         </div>
         <Link
+          id="create-workflow-btn"
           href={`/app/${ws.id}/workflows`}
           className="inline-flex w-fit items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark"
         >
@@ -64,7 +68,7 @@ export default async function DashboardPage({
       </div>
 
       {/* Stats */}
-      <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div id="dashboard-stats" className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {stats.map((s) => (
           <div key={s.label} className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5">
             <p className="text-xs text-zinc-500 sm:text-sm">{s.label}</p>
