@@ -1,10 +1,18 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-// Supabase Edge Function: run-scheduled-workflow
-// Called by PG Cron every minute to execute due workflows.
+/**
+ * Supabase Edge Function: run-scheduled-workflow
+ * Called by GitHub Actions (every 5 min) or PG Cron (every 1 min).
+ *
+ * Flow:
+ *   1. Find due workflows (next_run_at <= now())
+ *   2. For each: call Vercel API /api/workflows/[id]/run (full engine)
+ *   3. Update next_run_at
+ */
+
+const VERCEL_URL = Deno.env.get("VERCEL_URL") || "https://flowly.vercel.app";
 
 Deno.serve(async (req: Request) => {
-  // Verify service role key
   const authHeader = req.headers.get("Authorization") || "";
   const apikey = req.headers.get("apikey") || "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -29,7 +37,7 @@ Deno.serve(async (req: Request) => {
       serviceKey
     );
 
-    // Scan mode: find all due workflows and execute them
+    // --- Scan mode: find all due, call Vercel for each ---
     if (scan) {
       const { data: dueWfs, error: dueError } = await supabase
         .from("workflows")
@@ -42,21 +50,49 @@ Deno.serve(async (req: Request) => {
 
       if (dueError) throw dueError;
 
+      const wfs = (dueWfs ?? []) as {
+        id: string;
+        workspace_id: string;
+        schedule: string;
+      }[];
+
       const results: { id: string; status: string }[] = [];
-      const wfs = (dueWfs ?? []) as { id: string; workspace_id: string; schedule: string }[];
 
       for (const wf of wfs) {
         try {
-          const result = await runSingleWorkflow(wf.id, wf.workspace_id, supabase);
-          results.push({ id: wf.id, status: result.status });
+          // Call Vercel run API (full engine with integrations)
+          const runRes = await fetch(
+            `${VERCEL_URL}/api/workflows/${wf.id}/run`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-service-role": serviceKey,
+              },
+              body: JSON.stringify({ trigger: "schedule" }),
+            }
+          );
 
-          // Update next_run_at via RPC
-          await supabase.rpc("next_cron_occurrence", {
-            cron_expr: wf.schedule,
-            from_ts: new Date().toISOString(),
-          });
+          const runData = (await runRes.json().catch(() => ({}))) as {
+            success?: boolean;
+            error?: string;
+            run?: { status?: string };
+          };
+
+          const status = runData.run?.status || (runRes.ok ? "success" : "failed");
+          results.push({ id: wf.id, status });
+
+          // Update next_run_at
+          const nextRun = nextCronOccurrence(wf.schedule, new Date());
+          await supabase
+            .from("workflows")
+            .update({ next_run_at: nextRun.toISOString() })
+            .eq("id", wf.id);
         } catch (e) {
-          results.push({ id: wf.id, status: `error: ${e instanceof Error ? e.message : "unknown"}` });
+          results.push({
+            id: wf.id,
+            status: `error: ${e instanceof Error ? e.message : "unknown"}`,
+          });
         }
       }
 
@@ -66,7 +102,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Single workflow mode
+    // --- Single workflow mode ---
     if (!workflow_id || !workspace_id) {
       return new Response(
         JSON.stringify({ error: "Missing workflow_id/workspace_id or scan:true" }),
@@ -74,15 +110,34 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const result = await runSingleWorkflow(workflow_id, workspace_id, supabase);
+    const runRes = await fetch(
+      `${VERCEL_URL}/api/workflows/${workflow_id}/run`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-service-role": serviceKey,
+        },
+        body: JSON.stringify({ trigger: "schedule" }),
+      }
+    );
+
+    const runData = (await runRes.json().catch(() => ({}))) as {
+      success?: boolean;
+      error?: string;
+      run?: { status?: string; id?: string };
+    };
 
     return new Response(
       JSON.stringify({
-        status: result.status,
-        run_id: result.runId,
-        nodes_executed: result.nodesExecuted,
+        status: runData.run?.status || (runRes.ok ? "success" : "failed"),
+        run_id: runData.run?.id,
+        error: runData.error,
       }),
-      { headers: { "Content-Type": "application/json" } }
+      {
+        status: runRes.status,
+        headers: { "Content-Type": "application/json" },
+      }
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
@@ -93,121 +148,45 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function runSingleWorkflow(
-  workflowId: string,
-  workspaceId: string,
-  supabase: ReturnType<typeof createClient>
-): Promise<{ status: string; runId: string; nodesExecuted: number; error?: string }> {
-  // Load nodes
-  const { data: nodesRow, error: nodesError } = await supabase
-    .from("workflow_nodes")
-    .select("nodes, edges")
-    .eq("workflow_id", workflowId)
-    .maybeSingle();
+// Simple cron next-occurrence (mirrors the app logic)
+function nextCronOccurrence(cron: string, from: Date): Date {
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) return new Date(from.getTime() + 3600_000);
 
-  if (nodesError) throw nodesError;
-  if (!nodesRow) return { status: "skipped", runId: "", nodesExecuted: 0, error: "No nodes" };
+  const [min, hour, , , dow] = parts;
+  const result = new Date(from);
+  result.setSeconds(0, 0);
 
-  const nodes = ((nodesRow as Record<string, unknown>).nodes ?? []) as Record<string, unknown>[];
-  const edges = ((nodesRow as Record<string, unknown>).edges ?? []) as Record<string, unknown>[];
-
-  if (nodes.length === 0) return { status: "skipped", runId: "", nodesExecuted: 0, error: "Empty" };
-
-  // Create run
-  const { data: run, error: runError } = await supabase
-    .from("workflow_runs")
-    .insert({ workflow_id: workflowId, workspace_id: workspaceId, status: "running", trigger: "schedule" })
-    .select()
-    .single();
-
-  if (runError) throw runError;
-  const runId = (run as { id: string }).id;
-
-  // Execute
-  const result = await executeWorkflow(nodes, edges, workflowId, workspaceId, runId, supabase);
-
-  // Update run
-  await supabase
-    .from("workflow_runs")
-    .update({ status: result.status, finished_at: new Date().toISOString(), error: result.error || null })
-    .eq("id", runId);
-
-  return { status: result.status, runId, nodesExecuted: result.nodesExecuted, error: result.error };
-}
-
-async function executeWorkflow(
-  nodes: Record<string, unknown>[],
-  edges: Record<string, unknown>[],
-  workflowId: string,
-  workspaceId: string,
-  runId: string,
-  supabase: ReturnType<typeof createClient>
-): Promise<{ status: string; error?: string; nodesExecuted: number }> {
-  let executed = 0;
-  const visited = new Set<string>();
-
-  // Find start node (trigger)
-  const triggerNode = nodes.find((n) => n.type === "trigger");
-  if (!triggerNode) {
-    return { status: "failed", error: "No trigger node", nodesExecuted: 0 };
+  if (min === "*" && hour === "*") {
+    result.setMinutes(result.getMinutes() + 1);
+    return result;
+  }
+  if (hour === "*") {
+    result.setMinutes(parseInt(min, 10) || 0);
+    result.setHours(result.getHours() + 1);
+    return result;
   }
 
-  // BFS through edges
-  const queue: string[] = [triggerNode.id as string];
-  const nodeMap = new Map(nodes.map((n) => [n.id as string, n]));
+  result.setMinutes(parseInt(min, 10) || 0);
+  result.setHours(parseInt(hour, 10) || 0);
 
-  while (queue.length > 0) {
-    const nodeId = queue.shift()!;
-    if (visited.has(nodeId)) continue;
-    visited.add(nodeId);
-
-    const node = nodeMap.get(nodeId);
-    if (!node) continue;
-
-    try {
-      // Log node start
-      await supabase.from("run_logs").insert({
-        run_id: runId,
-        node_id: nodeId,
-        node_label: (node.label as string) || node.type,
-        status: "running",
-      });
-
-      // Execute node (simplified — log for non-trigger nodes)
-      if (node.type !== "trigger") {
-        // In production, dispatch to provider
-        // For now, mark as success (actual execution via main engine)
-        await supabase.from("run_logs").insert({
-          run_id: runId,
-          node_id: nodeId,
-          node_label: (node.label as string) || node.type,
-          status: "success",
-          output: JSON.stringify({ note: "executed via edge function" }),
-        });
+  if (dow !== "*") {
+    const days: number[] = [];
+    for (const p of dow.split(",")) {
+      if (p.includes("-")) {
+        const [a, b] = p.split("-").map(Number);
+        for (let d = a; d <= b; d++) days.push(d);
+      } else {
+        days.push(parseInt(p, 10));
       }
-
-      executed++;
-
-      // Find next nodes
-      const nextEdges = edges.filter((e) => e.source === nodeId);
-      for (const edge of nextEdges) {
-        const target = edge.target as string;
-        if (!visited.has(target)) {
-          queue.push(target);
-        }
-      }
-    } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      await supabase.from("run_logs").insert({
-        run_id: runId,
-        node_id: nodeId,
-        node_label: (node.label as string) || node.type,
-        status: "failed",
-        error: errMsg,
-      });
-      return { status: "failed", error: errMsg, nodesExecuted: executed };
+    }
+    let add = 0;
+    while (!days.includes(result.getDay()) && add < 8) {
+      add++;
+      result.setDate(result.getDate() + 1);
     }
   }
 
-  return { status: "success", nodesExecuted: executed };
+  if (result <= from) result.setDate(result.getDate() + 1);
+  return result;
 }
