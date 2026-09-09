@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 /**
  * GET /api/sso?provider=google|microsoft|okta
@@ -9,7 +10,10 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const provider = request.nextUrl.searchParams.get("provider") ?? "google";
-  const redirectTo = request.nextUrl.searchParams.get("redirect") ?? "/app";
+  const redirectTo = safeRedirectPath(
+    request.nextUrl.searchParams.get("redirect"),
+    "/app"
+  );
 
   // Map our provider names to Supabase OAuth providers
   const providerMap: Record<string, string> = {

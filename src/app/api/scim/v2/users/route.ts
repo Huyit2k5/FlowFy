@@ -5,14 +5,29 @@ import { createServerClient } from "@supabase/ssr";
  * SCIM 2.0 User Provisioning API
  * For enterprise IdP integration (Azure AD, Okta, etc.)
  *
- * Auth: Bearer token (workspace SCIM token from settings)
+ * Auth: Bearer token = workspace `scim_token` (dedicated provisioning credential,
+ *       NOT the HMAC webhook secret).
+ *
+ * Security:
+ *   - Role is validated against an allow-list. SCIM may only provision
+ *     non-privileged members (default 'member'). Provisioning owner/admin
+ *     is rejected to prevent privilege escalation.
  *
  * Endpoints (all on /api/scim/v2/users):
  *   GET    — List provisioned users
  *   POST   — Create user (provision)
- *   PUT    — Update user (full replace, uses ?id= param)
+ *   PUT    — Update user (uses ?id= param)
  *   DELETE — Deprovision (deactivate, uses ?id= param)
  */
+
+// Roles SCIM is allowed to assign. Owner/admin are deliberately excluded.
+const ALLOWED_SCIM_ROLES = new Set(["member"]);
+
+function normalizeRole(input: unknown, fallback = "member"): string {
+  const role = typeof input === "string" ? input.trim().toLowerCase() : fallback;
+  if (ALLOWED_SCIM_ROLES.has(role)) return role;
+  return "member"; // fail-safe: unknown/privileged roles downgrade to member
+}
 
 function getScimClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -26,16 +41,17 @@ async function verifyScimToken(request: NextRequest): Promise<string | null> {
   const auth = request.headers.get("Authorization");
   if (!auth?.startsWith("Bearer ")) return null;
 
-  const token = auth.slice(7);
-  const supabase = getScimClient();
+  const token = auth.slice(7).trim();
+  if (!token) return null;
 
+  const supabase = getScimClient();
   const { data, error } = await supabase
     .from("workspace_security")
-    .select("workspace_id, hmac_secret")
-    .eq("hmac_secret", token)
+    .select("workspace_id, scim_token")
+    .eq("scim_token", token)
     .limit(1);
 
-  if (error || !data?.[0]) return null;
+  if (error || !data?.[0] || !data[0].scim_token) return null;
   return data[0].workspace_id as string;
 }
 
@@ -48,20 +64,25 @@ export async function GET(request: NextRequest) {
 
   const supabase = getScimClient();
   const sp = request.nextUrl.searchParams;
-  const startIndex = parseInt(sp.get("startIndex") ?? "1", 10);
-  const count = Math.min(parseInt(sp.get("count") ?? "100", 10), 1000);
+  const startIndex = Math.max(1, parseInt(sp.get("startIndex") ?? "1", 10) || 1);
+  const count = Math.min(Math.max(parseInt(sp.get("count") ?? "100", 10) || 100, 1), 1000);
+
+  // Correct offset paging: (page-1)*size .. (page*size - 1)
+  const from = (startIndex - 1) * count;
+  const to = from + count - 1;
 
   const { data, error } = await supabase
     .from("members")
     .select("id, user_id, role, invited_email, status")
     .eq("workspace_id", workspaceId)
-    .range((startIndex - 1) * count, startIndex * count - 1);
+    .range(from, to);
 
   if (error) {
     return NextResponse.json({ status: 500, errors: [{ code: "internalError", detail: error.message }] }, { status: 500 });
   }
 
-  const users = (data ?? []).map((m: any) => ({
+  const rows = (data ?? []) as Array<{ id: string; user_id: string | null; role: string; invited_email: string | null; status: string }>;
+  const users = rows.map((m) => ({
     schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
     id: m.id,
     userName: m.invited_email ?? "",
@@ -92,8 +113,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: 400, errors: [{ code: "invalidValue", detail: "userName required" }] }, { status: 400 });
   }
 
-  const email = body.userName as string;
-  const role = (body.role ?? "member") as string;
+  const email = String(body.userName).trim();
+  const role = normalizeRole(body.role);
 
   const supabase = getScimClient();
 
@@ -155,9 +176,9 @@ export async function PUT(request: NextRequest) {
 
   const supabase = getScimClient();
   const updates: Record<string, unknown> = {};
-  if (body.role) updates.role = body.role;
+  if (body.role) updates.role = normalizeRole(body.role);
   if (body.active !== undefined) updates.status = body.active ? "active" : "invited";
-  if (body.userName) updates.invited_email = body.userName;
+  if (body.userName) updates.invited_email = String(body.userName).trim();
 
   const { data, error } = await supabase
     .from("members")

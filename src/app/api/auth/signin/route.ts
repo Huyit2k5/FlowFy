@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
@@ -23,6 +24,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const next = formData.get("next") || "/app";
-  return NextResponse.redirect(new URL(String(next), request.url));
+  const next = safeRedirectPath(formData.get("next") as string | null, "/app");
+  return NextResponse.redirect(new URL(next, request.url));
 }

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createPublicClient } from "@supabase/supabase-js";
 import { executeWorkflow } from "@/lib/workflow-engine";
+import { checkWorkflowAccess } from "@/lib/rbac";
 import crypto from "crypto";
 
 function getServiceClient() {
@@ -9,6 +10,14 @@ function getServiceClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
+}
+
+function safeTokenMatch(provided: string | null, expected: string): boolean {
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
 /**
@@ -46,11 +55,11 @@ export async function POST(
     webhook_token: string | null;
   };
 
-  // Nếu workflow có trigger_type = webhook, kiểm tra token
+  // Nếu workflow có trigger_type = webhook, kiểm tra token (timing-safe)
   if (workflow.trigger_type === "webhook" && workflow.webhook_token) {
     const url = new URL(request.url);
     const token = url.searchParams.get("token");
-    if (token !== workflow.webhook_token) {
+    if (!safeTokenMatch(token, workflow.webhook_token)) {
       return NextResponse.json({ error: "Token không hợp lệ" }, { status: 403 });
     }
   }
@@ -113,8 +122,15 @@ export async function GET(
     return NextResponse.json({ error: "Không tìm thấy" }, { status: 404 });
   }
 
+  // Chỉ thành viên có quyền editor trở lên mới xem/được cấp webhook token
+  const wfRow = wf as { id: string; workspace_id: string; webhook_token: string | null };
+  const access = await checkWorkflowAccess(user.id, wfRow.workspace_id, wfRow.id, "edit");
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.reason ?? "Không đủ quyền" }, { status: 403 });
+  }
+
   // Generate token nếu chưa có
-  let token = (wf as { webhook_token: string | null }).webhook_token;
+  let token = wfRow.webhook_token;
   if (!token) {
     token = crypto.randomBytes(24).toString("hex");
     await supabase.from("workflows").update({ webhook_token: token }).eq("id", id);
