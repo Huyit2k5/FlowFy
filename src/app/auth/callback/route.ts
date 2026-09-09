@@ -10,7 +10,6 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
   const code = searchParams.get("code");
-  const redirectTo = searchParams.get("flowly_redirect") ?? "/app";
 
   if (!code) {
     return NextResponse.redirect(new URL("/login?error=no_code", request.url));

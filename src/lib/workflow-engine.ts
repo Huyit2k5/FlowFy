@@ -3,6 +3,8 @@ import { createServerClient } from "@supabase/ssr";
 import crypto from "crypto";
 import type { Workflow, WorkflowNode, WorkflowEdge } from "./workflow-types";
 import { executeProviderNode } from "./integrations/registry";
+import { evalCondition, evalConditionStrict } from "./safe-expression";
+import { isSafeUrl, fetchSafe } from "./ssrf-guard";
 
 // ============================================================
 // Types
@@ -83,26 +85,21 @@ const nodeRunners: Record<string, (node: WorkflowNode, ctx: ExecutionContext) =>
     const headers = resolveTemplateDeep(cfg.headers || {}, ctx.data) as Record<string, string>;
     const body = cfg.body ? resolveTemplate(cfg.body as string, ctx.data) : undefined;
     const timeout = (cfg.timeout as number) || 30;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout * 1000);
-    try {
-      const bodyStr = method !== "GET" ? (body ?? "") : "";
-      if (ctx.hmacSecret && bodyStr) {
-        headers["X-Flowly-Signature"] = hmacSign(ctx.hmacSecret, bodyStr);
-        headers["X-Flowly-Timestamp"] = String(Date.now());
-      }
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json", ...headers },
-        body: method !== "GET" ? body : undefined,
-        signal: controller.signal,
-      });
-      const text = await res.text();
-      let json: unknown = text;
-      try { json = JSON.parse(text); } catch { /* keep raw */ }
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
-      return { status: res.status, statusText: res.statusText, data: json, headers: Object.fromEntries(res.headers) };
-    } finally { clearTimeout(timer); }
+    const bodyStr = method !== "GET" ? (body ?? "") : "";
+    if (ctx.hmacSecret && bodyStr) {
+      headers["X-Flowly-Signature"] = hmacSign(ctx.hmacSecret, bodyStr);
+      headers["X-Flowly-Timestamp"] = String(Date.now());
+    }
+    const res = await fetchSafe(url, {
+      method,
+      headers: { "Content-Type": "application/json", ...headers },
+      body: method !== "GET" ? body : undefined,
+    }, timeout);
+    const text = await res.text();
+    let json: unknown = text;
+    try { json = JSON.parse(text); } catch { /* keep raw */ }
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+    return { status: res.status, statusText: res.statusText, data: json, headers: Object.fromEntries(res.headers) };
   },
   async http(node, ctx) {
     const cfg = node.data;
@@ -118,28 +115,23 @@ const nodeRunners: Record<string, (node: WorkflowNode, ctx: ExecutionContext) =>
     }
     const body = cfg.body ? resolveTemplate(cfg.body as string, ctx.data) : undefined;
     const timeout = (cfg.timeout as number) || 30;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout * 1000);
-    try {
-      const res = await fetch(url, {
-        method,
-        headers,
-        body: method !== "GET" ? body : undefined,
-        signal: controller.signal,
-      });
-      const text = await res.text();
-      let json: unknown = text;
-      try { json = JSON.parse(text); } catch { /* keep raw */ }
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
-      return { status: res.status, statusText: res.statusText, data: json, headers: Object.fromEntries(res.headers) };
-    } finally { clearTimeout(timer); }
+    if (!isSafeUrl(url)) throw new Error(`URL bị chặn (SSRF protection): ${url}`);
+    const res = await fetchSafe(url, {
+      method,
+      headers,
+      body: method !== "GET" ? body : undefined,
+    }, timeout);
+    const text = await res.text();
+    let json: unknown = text;
+    try { json = JSON.parse(text); } catch { /* keep raw */ }
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+    return { status: res.status, statusText: res.statusText, data: json, headers: Object.fromEntries(res.headers) };
   },
   async condition(node, ctx) {
     const expression = resolveTemplate((node.data.expression as string) || "", ctx.data);
-    try {
-      const result = new Function(`"use strict"; return (${expression});`)() as boolean;
-      return { matched: Boolean(result) };
-    } catch { return { matched: false, error: "Invalid expression" }; }
+    const result = evalCondition(expression, ctx.data);
+    if (result === null) return { matched: false, error: "Invalid expression" };
+    return { matched: result };
   },
   async delay(node, ctx) {
     const seconds = (node.data.seconds as number) || 5;
@@ -171,20 +163,37 @@ const nodeRunners: Record<string, (node: WorkflowNode, ctx: ExecutionContext) =>
   },
   async database(node, ctx) {
     const cfg = node.data;
-    const query = resolveTemplate((cfg.query as string) || "", ctx.data);
+
+    // Supabase mode: READ-only, table-based. No raw SQL (prevents injection).
     if (cfg.mode === "supabase" || !cfg.mode) {
-      if (!query) throw new Error("Query không được để trống");
-      const { data, error } = await ctx.supabase.rpc("execute_sql", { sql: query });
+      const table = (cfg.table as string) || "";
+      if (!/^[a-z_][a-z0-9_]*$/i.test(table)) {
+        throw new Error("Bảng không hợp lệ");
+      }
+      const selectCols = (cfg.select as string) || "*";
+      const eq = (cfg.eq as Record<string, string>) || {};
+      const limit = Math.min(Math.max(parseInt(cfg.limit as string, 10) || 100, 1), 1000);
+
+      let query = ctx.supabase.from(table).select(selectCols).limit(limit);
+      for (const [col, rawVal] of Object.entries(eq)) {
+        if (!/^[a-z_][a-z0-9_]*$/i.test(col)) throw new Error("Cột không hợp lệ");
+        const val = resolveTemplate(rawVal, ctx.data);
+        query = query.eq(col, val);
+      }
+
+      const { data, error } = await query;
       if (error) throw new Error(error.message);
-      return { rows: data, rowCount: Array.isArray(data) ? data.length : 1 };
-    } else {
-      const url = resolveTemplate((cfg.url as string) || "", ctx.data);
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (cfg.apiKey) headers["Authorization"] = `Bearer ${cfg.apiKey}`;
-      const res = await fetch(url, { method: "GET", headers });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return { data: await res.json() };
+      return { rows: data, rowCount: Array.isArray(data) ? data.length : 0 };
     }
+
+    // External HTTP API mode
+    const url = resolveTemplate((cfg.url as string) || "", ctx.data);
+    if (!isSafeUrl(url)) throw new Error("URL không hợp lệ");
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (cfg.apiKey) headers["Authorization"] = `Bearer ${cfg.apiKey}`;
+    const res = await fetchSafe(url, { method: "GET", headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { data: await res.json() };
   },
   async slack(node, ctx) {
     const integrations = (ctx.data.__integrations || []) as Array<{ provider: string; config: Record<string, unknown> }>;
@@ -194,7 +203,8 @@ const nodeRunners: Record<string, (node: WorkflowNode, ctx: ExecutionContext) =>
     const payload: Record<string, unknown> = { text };
     if (node.data.channel) payload.channel = node.data.channel;
     if (!webhookUrl) return { ok: false, simulated: true, message: "No Slack webhook configured", payload };
-    const res = await fetch(webhookUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    if (!isSafeUrl(webhookUrl)) throw new Error("Slack webhook URL bị chặn (SSRF)");
+    const res = await fetchSafe(webhookUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const result = await res.json();
     return { ok: res.ok, ...result, payload };
   },
@@ -296,8 +306,7 @@ const nodeRunners: Record<string, (node: WorkflowNode, ctx: ExecutionContext) =>
     }
     const results = conditions.map((expr) => {
       const expression = resolveTemplate(expr, ctx.data);
-      try { return Boolean(new Function(`"use strict"; return (${expression});`)()); }
-      catch { return false; }
+      return evalConditionStrict(expression, ctx.data);
     });
     const matched = operator === "AND" ? results.every(Boolean) : results.some(Boolean);
     return { matched, results, operator };

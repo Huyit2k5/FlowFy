@@ -1,4 +1,5 @@
 import type { IntegrationProvider, IntegrationContext, IntegrationResult, ConfigField } from "./types";
+import { evalConditionStrict } from "@/lib/safe-expression";
 
 // ---- Data Transform ----
 const transformConfig: ConfigField[] = [
@@ -65,8 +66,7 @@ export const transformProvider: IntegrationProvider = {
           if (!cfg.condition) return { success: true, data: input };
           const arr = Array.isArray(input) ? input : [input];
           const filtered = arr.filter((item) => {
-            try { return Boolean(new Function("item", `return ${cfg.condition}`)(item)); }
-            catch { return false; }
+            return evalConditionStrict(cfg.condition, { item });
           });
           return { success: true, data: filtered };
         }
