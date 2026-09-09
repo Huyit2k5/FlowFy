@@ -15,6 +15,7 @@ interface Props {
 const navItems = [
   { href: "", label: "Tổng quan", icon: DashboardIcon },
   { href: "/workflows", label: "Workflows", icon: FlowIcon },
+  { href: "/templates", label: "Templates", icon: TemplateIcon },
   { href: "/members", label: "Thành viên", icon: UsersIcon },
   { href: "/integrations", label: "Tích hợp", icon: PlugIcon },
   { href: "/settings", label: "Cài đặt", icon: SettingsIcon },
@@ -191,6 +192,17 @@ function UsersIcon({ className }: { className?: string }) {
       <circle cx="9" cy="8" r="3.5" />
       <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
       <path d="M16 4.5a3.5 3.5 0 0 1 0 7" />
+    </svg>
+  );
+}
+
+function TemplateIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <path d="M17.5 14v7M14 17.5h7" />
     </svg>
   );
 }
